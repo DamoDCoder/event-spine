@@ -1,0 +1,109 @@
+version: '3'
+
+vars:
+  IMAGE: event-spine
+  GO_PACKAGES: ./...
+  SEEDS: 1000
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  # ---------------------------------------------------------------- inner loop
+
+  test:
+    desc: Fast host test run. Not authoritative — see test:container.
+    cmds:
+      - go test -race {{.GO_PACKAGES}}
+
+  lint:
+    desc: Vet and format check
+    cmds:
+      - go vet {{.GO_PACKAGES}}
+      - test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+  check:determinism:
+    desc: Fail if production packages import nondeterministic stdlib directly
+    cmds:
+      - ./scripts/check-determinism.sh
+
+  # ---------------------------------------------------------- authoritative run
+
+  image:
+    desc: Build the container image
+    cmds:
+      - docker build --target runtime -t {{.IMAGE}}:dev .
+
+  test:container:
+    desc: Authoritative test run, inside the image. When this disagrees with `task test`, this one is right.
+    cmds:
+      - docker build --target test -t {{.IMAGE}}:test .
+      - docker run --rm {{.IMAGE}}:test
+
+  # ------------------------------------------------------------------- claims
+
+  verify:determinism:
+    desc: Run SEEDS seeds and assert a single projection hash
+    cmds:
+      - go run ./cmd/spine verify determinism --seeds {{.SEEDS}}
+
+  verify:determinism:container:
+    desc: Same as verify:determinism, in the container. Hashes must match the host run.
+    deps: [image]
+    cmds:
+      - docker run --rm {{.IMAGE}}:dev verify determinism --seeds {{.SEEDS}}
+
+  bench:log:
+    desc: Append throughput and p50/p99/p999 latency across durability modes
+    cmds:
+      - go test -bench=BenchmarkLog -benchmem -count=6 ./internal/log | tee bench/log.txt
+
+  bench:compare:
+    desc: Owned log versus Kafka on an identical workload (M5)
+    cmds:
+      - go run ./cmd/spine bench compare | tee bench/compare.txt
+
+  # -------------------------------------------------------------- simulation
+
+  repro:
+    desc: 'Reconstruct a specific failure exactly. Usage: task repro SEED=8412'
+    requires:
+      vars: [SEED]
+    cmds:
+      - go run ./cmd/spine repro --seed {{.SEED}}
+
+  sim:corpus:
+    desc: Replay every seed in the regression corpus
+    cmds:
+      - go run ./cmd/spine sim corpus --dir seeds
+
+  sim:crash-matrix:
+    desc: Crash at every injected point and assert nothing durable is lost
+    cmds:
+      - go run ./cmd/spine sim crash-matrix
+
+  sim:sweep:
+    desc: 'Random seed sweep with swarm-randomized fault configs. Usage: task sim:sweep COUNT=10000'
+    vars:
+      COUNT: '{{.COUNT | default "10000"}}'
+    cmds:
+      - go run ./cmd/spine sim sweep --count {{.COUNT}} --minimize --out seeds
+
+  # ------------------------------------------------------------------- gates
+
+  ci:
+    desc: Everything CI runs. Same commands a developer runs.
+    cmds:
+      - task: lint
+      - task: check:determinism
+      - task: test:container
+      - task: verify:determinism:container
+      - task: sim:corpus
+
+  reset:
+    desc: Remove build artifacts and local log data
+    cmds:
+      - rm -rf ./bin ./data
+      - docker rmi -f {{.IMAGE}}:dev {{.IMAGE}}:test 2>/dev/null || true

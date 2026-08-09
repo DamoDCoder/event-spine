@@ -1,0 +1,14 @@
+.git
+.gitignore
+bin/
+data/
+*.log
+
+# Never ship local log segments into an image. They are large, they are machine
+# specific, and a stale segment in an image would make a recovery test lie.
+*.seg
+*.idx
+
+.DS_Store
+.idea/
+.vscode/

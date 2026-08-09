@@ -1,0 +1,16 @@
+# Copy to .gitignore in the new repository.
+
+bin/
+data/
+*.seg
+*.idx
+*.log
+
+# Benchmark results are NOT ignored. They are committed so a performance
+# regression shows up as a diff and gets reviewed like any other change.
+
+.DS_Store
+.idea/
+.vscode/
+*.out
+coverage.*
