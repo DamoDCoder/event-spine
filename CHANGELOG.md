@@ -15,7 +15,26 @@ grouped under `Unreleased`.
   deterministic simulation testing standard.
 - A seed corpus directory for regression seeds.
 
+- The M0 determinism spike finding, `docs/decisions/m0-determinism-spike.md`.
+
 ### Decision Notes
+
+M0, measured against Signal Garden at `bb17562` on 2026-08-10:
+
+- The batch path is genuinely deterministic. 1,000 seeds produce a byte-identical
+  seed→hash table on darwin/arm64, in the pinned container on linux/arm64, and on
+  linux/amd64. The claim survived.
+- The live path is not reproducible from its configuration. A `select` over a
+  ready tick and a ready command decides which tick a control change lands on:
+  40 identical scenarios produced 7 distinct projection hashes. Replay is
+  therefore keyed on the event log, never on run configuration.
+- Terminal-state hash equality can pass vacuously. The same probe over a longer
+  run reported one hash across 40 genuinely divergent runs, because the
+  projection had reached an absorbing state. `verify:determinism` compares a
+  per-step hash chain and asserts liveness as a result.
+- The choice between two simultaneously ready events is a nondeterministic
+  dependency that none of `Clock`, `Source`, `IDGen`, `FS`, or `Transport`
+  covers. It becomes the scheduler's, and the scheduler takes it from the seed.
 
 Carried over from the ideas cradle, where this project was designed:
 
