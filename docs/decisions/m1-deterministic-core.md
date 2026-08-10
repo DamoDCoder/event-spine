@@ -10,6 +10,8 @@
 
 ## What Was Measured
 
+The gate's checks are drawn in [concepts.md](../concepts.md).
+
 `task verify:determinism` runs the ledger workload in `internal/sim` — credits,
 debits, and transfers over 16 accounts, 500 commands per seed — and folds every
 seed's chain digest into one aggregate.

@@ -31,6 +31,9 @@ interface can adopt at M5, not a foundation the projects sit on. That inversion 
 what makes partitioning, offsets, consumer groups, and backpressure things this
 repository understands rather than things it configures.
 
+> Diagrams of the boundary, the cycle, and the hash chain are in
+> [concepts.md](concepts.md).
+
 ## internal/core
 
 The command → validate → event → projection cycle. No I/O.

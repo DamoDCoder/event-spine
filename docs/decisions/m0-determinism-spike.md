@@ -32,6 +32,8 @@ processing holds under deliberate redelivery.
 
 The live path is where it stops holding.
 
+> Leaks A and B are drawn in [concepts.md](../concepts.md).
+
 ## Leaks Found
 
 ### A. A live run is not reproducible from `(seed, controls, target tick)` — high

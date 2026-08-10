@@ -16,6 +16,9 @@ A test written after the log would be written to agree with the log. So the
 filesystem interface, both implementations, and the tests that compare them
 landed first, with nothing depending on them yet.
 
+> The durability layers, and the gap between what is measured and what is
+> believed, are drawn in [concepts.md](../concepts.md).
+
 ## The Model
 
 `sim.FS` asserts four rules that a naive in-memory map does not:

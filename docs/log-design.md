@@ -29,6 +29,9 @@ Out of scope for v1, each deferred with intent:
 - Exactly-once delivery semantics. At-least-once plus idempotent projections is
   the contract, and the projection is where duplicates die.
 
+> Which regions the checksum covers, and why the offset and length sit outside
+> it, is drawn in [concepts.md](concepts.md).
+
 ## Record Format
 
 Fixed header, variable payload. Little-endian.

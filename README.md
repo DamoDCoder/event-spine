@@ -90,11 +90,22 @@ owns it; it does not get quietly downgraded.
 
 ## Documentation
 
+- [docs/concepts.md](docs/concepts.md) — the implemented ideas, drawn: the
+  determinism boundary, why the hash chain replaced a terminal hash, what the
+  record checksum does not cover, and where the filesystem model stops being
+  measured
 - [docs/roadmap.md](docs/roadmap.md) — M0 to M5, each with a kill gate
 - [docs/architecture.md](docs/architecture.md) — components and their boundaries
 - [docs/log-design.md](docs/log-design.md) — record format, segments, recovery, durability modes
 - [docs/simulation-testing.md](docs/simulation-testing.md) — the harness, fault catalogue, seed corpus
 - [seeds/README.md](seeds/README.md) — the regression corpus and how to add to it
+
+Decision notes record what each milestone claimed, what the measurement showed,
+and what changed as a result:
+
+- [docs/decisions/m0-determinism-spike.md](docs/decisions/m0-determinism-spike.md)
+- [docs/decisions/m1-deterministic-core.md](docs/decisions/m1-deterministic-core.md)
+- [docs/decisions/m2-filesystem-model.md](docs/decisions/m2-filesystem-model.md)
 
 ## Consumers
 
