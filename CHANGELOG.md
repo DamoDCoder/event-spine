@@ -22,6 +22,9 @@ grouped under `Unreleased`.
   seeded scheduler, and the ledger workload the determinism gate runs.
 - `cmd/spine verify determinism`, and the M1 result in
   `docs/decisions/m1-deterministic-core.md`.
+- The filesystem interface, a real adapter in `internal/runtime`, a crashable
+  simulated one in `internal/sim`, and the tests that compare them:
+  `docs/decisions/m2-filesystem-model.md`.
 
 ### Decision Notes
 
@@ -52,6 +55,18 @@ M1, on 2026-08-10:
 - An absorbed run fails the gate rather than passing it, and the generator's
   output is pinned to the published splitmix64 vectors, because a seed corpus
   whose generator drifts is a set of numbers that used to mean something.
+
+M2, in progress:
+
+- The filesystem model and the tests that check it landed before the log, so the
+  tests could not be written to agree with the code they guard.
+- Its semantics are differentiated against a real disk across every failure mode
+  the interface defines, and a real process killed mid-record leaves a real torn
+  tail on a real filesystem.
+- The durability half is still only a belief. SIGKILL destroys a process, not a
+  machine, so nothing here has yet observed unsynced data being lost. No
+  durability claim is publishable until a fault-injecting block device says
+  otherwise, and the note records that rather than quietly assuming it.
 
 Carried over from the ideas cradle, where this project was designed:
 
