@@ -16,9 +16,19 @@ seed's chain digest into one aggregate.
 
 | Environment | Digest |
 | --- | --- |
-| Host, darwin/arm64 | `63b11be7e2656a89f4fdc3b6b093ef6c8dd832e027bf3c3768c035ef777d0f69` |
+| Host, darwin/arm64 | `17f6c8f9b1aa7703fa759c301d6684ed85d899c2162a62cd1c89eb871bd89c96` |
 | Container, linux/arm64 | identical |
 | Container, linux/amd64 | identical |
+
+> **The digest changed on 2026-08-10, after this milestone closed.** It was
+> originally `63b11be7e2656a89f4fdc3b6b093ef6c8dd832e027bf3c3768c035ef777d0f69`.
+> `Event.AppendCanonical` claimed to encode the durable record's body but
+> carried a payload-length field the record format in `docs/log-design.md` does
+> not have, so an in-memory digest and one recomputed from a replayed segment
+> would have disagreed. Dropping the redundant field changed every chain, and
+> therefore the aggregate. The claim this milestone tested is unaffected — one
+> digest, three environments — and the change was made while `seeds/` was still
+> empty, which is the only time it is cheap.
 
 Across those 1,000 seeds: 534,626 events folded, 46,736 commands rejected for
 insufficient funds, 0 runs absorbed. Each seed is also run twice within one

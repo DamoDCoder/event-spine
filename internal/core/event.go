@@ -78,19 +78,22 @@ func (e Event) Validate() error {
 
 // AppendCanonical appends the event's canonical byte encoding to dst.
 //
-// The encoding is the durable record's body: the same bytes, in the same order,
-// that the log will frame and CRC. Keeping one encoding means a projection
-// digest computed in memory and one computed from a replayed segment cannot
-// disagree, which would otherwise be a bug that only appears after a restart.
+// The encoding is the durable record's body: byte for byte, the region the log
+// frames and covers with its CRC, as laid out in docs/log-design.md. Keeping
+// one encoding means a projection digest computed in memory and one computed
+// from a replayed segment cannot disagree, which would otherwise be a bug that
+// only appears after a restart.
 //
-// Little-endian, matching the record header. Every variable-length field is
-// length-prefixed, so no two distinct events can encode to the same bytes.
+// Little-endian, matching the record header. The payload carries no length of
+// its own: it runs to the end of the encoding, and the key's length prefix is
+// what keeps the encoding injective — "ab" with an empty payload and "a" with a
+// payload of "b" differ in their key-length field rather than in where the
+// caller decided to split them.
 func (e Event) AppendCanonical(dst []byte) []byte {
 	dst = binary.LittleEndian.AppendUint64(dst, uint64(e.Time))
 	dst = binary.LittleEndian.AppendUint16(dst, e.Schema)
 	dst = binary.LittleEndian.AppendUint16(dst, uint16(len(e.Key)))
 	dst = append(dst, e.Key...)
-	dst = binary.LittleEndian.AppendUint32(dst, uint32(len(e.Payload)))
 	dst = append(dst, e.Payload...)
 	return dst
 }
