@@ -16,6 +16,12 @@ grouped under `Unreleased`.
 - A seed corpus directory for regression seeds.
 
 - The M0 determinism spike finding, `docs/decisions/m0-determinism-spike.md`.
+- `internal/core`: the command, event, and projection cycle, with logical time,
+  a per-step hash chain, and absorbing-state detection.
+- `internal/sim`: deterministic clock, splitmix64 source, sequential identifiers,
+  seeded scheduler, and the ledger workload the determinism gate runs.
+- `cmd/spine verify determinism`, and the M1 result in
+  `docs/decisions/m1-deterministic-core.md`.
 
 ### Decision Notes
 
@@ -35,6 +41,17 @@ M0, measured against Signal Garden at `bb17562` on 2026-08-10:
 - The choice between two simultaneously ready events is a nondeterministic
   dependency that none of `Clock`, `Source`, `IDGen`, `FS`, or `Transport`
   covers. It becomes the scheduler's, and the scheduler takes it from the seed.
+
+M1, on 2026-08-10:
+
+- 1,000 seeds produce one digest, `63b11be7…`, identical on darwin/arm64, in the
+  pinned container on linux/arm64, and on linux/amd64. The claim held.
+- The gate was checked for teeth. Rewriting the ledger's digest to range a map
+  made it reject seed 1 on the in-process comparison, which is the class of bug
+  the import check cannot see.
+- An absorbed run fails the gate rather than passing it, and the generator's
+  output is pinned to the published splitmix64 vectors, because a seed corpus
+  whose generator drifts is a set of numbers that used to mean something.
 
 Carried over from the ideas cradle, where this project was designed:
 
