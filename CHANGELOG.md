@@ -34,6 +34,16 @@ grouped under `Unreleased`.
 - `log.Reader`: a cursor over the log, which is how a consumer streams it.
 - Consumer groups: explicit commits in their own fsynced commits log, kept as
   records so the commit history replays.
+- `internal/devtools/crash`, `spine sim crash-matrix`, `spine sim corpus`, and
+  `spine repro`: crash the log at every filesystem operation and check what
+  recovery kept.
+
+### Fixed
+
+- A crash could remove a whole segment, including records whose `Sync` had
+  returned. The log fsynced the segment file and never the directory that named
+  it, and a file whose directory entry was never synced does not survive a power
+  cut. Found by the crash matrix on its first run, recorded as `seeds/0001.md`.
 
 ### Decision Notes
 
@@ -76,6 +86,23 @@ M2, in progress:
   machine, so nothing here has yet observed unsynced data being lost. No
   durability claim is publishable until a fault-injecting block device says
   otherwise, and the note records that rather than quietly assuming it.
+
+M2 crash matrix, on 2026-08-12:
+
+- The harness earned its place on its first run. Seed 1 failed at 45 of its 51
+  crash points, all with the same cause: the log fsynced a segment file and
+  never the directory naming it, so a crash removed the whole segment along with
+  records whose `Sync` had returned. Recovery then reported a healthy empty log,
+  which is the worst shape a loss can take.
+- The bug was reachable only because the simulated filesystem models the POSIX
+  rule that a file needs its directory entry synced to exist after a power cut.
+  A model that had been generous about this would have agreed with the log and
+  found nothing.
+- The seed is committed as `seeds/0001.md` and was failing before the fix
+  landed, so `task sim:corpus` proves the fix rather than asserting it.
+- After the fix: 9,960 crash points across 200 seeds, no loss. That is the M2
+  recovery claim's evidence, and it is a simulation claim rather than a hardware
+  one — the caveat above still stands.
 
 M2 throughput, measured on 2026-08-12, darwin/arm64, Apple M2 Max, single
 producer, 64 byte records, `task bench:log`, full run in `bench/log.txt`:
