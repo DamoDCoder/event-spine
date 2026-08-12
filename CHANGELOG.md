@@ -105,6 +105,30 @@ producer, 64 byte records, `task bench:log`, full run in `bench/log.txt`:
   authoritative for correctness; for disk numbers on macOS it measures a VM's
   virtualised filesystem, which is neither this machine nor a Linux server.
 
+M2 throughput after buffering the write, same machine and same day:
+
+- One `Append` call now stages every record in one buffer and issues one
+  `write(2)` per segment it touches. A 256 event batch of 64 byte records in
+  `os` mode went from 366 µs to 10.8 µs per call — 1.43 µs to 42 ns per record,
+  a factor of 34, at 1.5 GB/sec.
+- **The 1M appends/sec claim now holds, but only under a reading worth stating
+  precisely:** batched calls in `os` mode, which never syncs, reach about
+  23.6M records/sec. The default `batch` mode reaches about 222,000/sec and
+  `sync` about 55,000/sec, both of them fsync-bound rather than syscall-bound.
+  The roadmap's claim names neither a durability mode nor a call shape, so it is
+  recorded as met in one and unmet in the other rather than declared passed.
+- Single-record calls are unchanged at 1.42 µs, because one record per call is
+  still one write. The batching helps a caller who has a batch; it does not
+  invent one.
+- What the append path costs is now the fsync and nothing else. On darwin that
+  is 4.5 ms of `F_FULLFSYNC`, which is why `batch` mode sits at 4.4 µs per
+  record with a 1,024 record sync interval. The Linux number will be different
+  and the default mode's honest figure needs a Linux machine that is not a VM on
+  this laptop.
+- Latency percentiles are unchanged: 6.7 µs p99 in `batch`, well inside the 2 ms
+  budget. Recovery and read costs are unchanged, since neither touches the write
+  path.
+
 Carried over from the ideas cradle, where this project was designed:
 
 - The log is written rather than adopted. Kafka hides partitioning, offsets,
