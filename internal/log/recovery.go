@@ -127,6 +127,7 @@ func openNamed(fs core.FS, name string, base Offset, opts Options, truncate bool
 	}
 	s.size = rec.Valid
 	s.next = rec.Next
+	s.count = int(rec.Records)
 	return s, rec, nil
 }
 
@@ -141,7 +142,13 @@ func (s *Segment) scan() (Recovery, error) {
 	var pos int64
 
 	for pos < size {
-		r, err := s.readRecordAt(pos, rec.Next)
+		// The offset a record carries is checked against the lowest one
+		// it could legally have rather than against an exact value.
+		// Compaction preserves offsets while dropping records, so after
+		// it runs a segment's offsets ascend with gaps in them, and a
+		// scan that demanded the next integer would call a compacted
+		// segment corrupt.
+		r, err := s.readRecordFrom(pos, rec.Next)
 		switch {
 		case err == nil:
 		case errors.Is(err, ErrTorn):
@@ -156,9 +163,9 @@ func (s *Segment) scan() (Recovery, error) {
 			return Recovery{}, err
 		}
 
-		s.noteIndex(rec.Next, pos)
+		s.noteIndex(r.Offset, pos)
 		pos += int64(r.Len)
-		rec.Next++
+		rec.Next = r.Offset + 1
 		rec.Records++
 	}
 

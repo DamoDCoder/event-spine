@@ -110,6 +110,11 @@ type Segment struct {
 	sealed   bool
 	maxBytes int64
 
+	// count is how many records the segment holds. It is not next-base,
+	// because compaction leaves gaps and the difference between those two
+	// numbers is exactly what compaction removed.
+	count int
+
 	// Buffers reused across appends. scratch stages the records of one
 	// call, marks holds the file position each of them will occupy, and one
 	// exists so a single-event append can reach the batch path without
@@ -143,13 +148,38 @@ func createNamed(fs core.FS, name string, base Offset, opts Options) (*Segment, 
 	}, nil
 }
 
-// readRecordAt reads and validates the record beginning at pos.
+// readRecordAt reads the record beginning at pos and requires it to carry the
+// offset the caller named.
+//
+// Use this wherever the exact offset is known, which is every lookup that went
+// through the index: it is the only check covering the offset field, since the
+// CRC deliberately does not.
+func (s *Segment) readRecordAt(pos int64, want Offset) (Record, error) {
+	rec, err := s.readRecordFrom(pos, want)
+	if err != nil {
+		return Record{}, err
+	}
+	if rec.Offset != want {
+		return Record{}, fmt.Errorf("%w: record at %d carries offset %d, expected %d",
+			ErrCorrupt, pos, rec.Offset, want)
+	}
+	return rec, nil
+}
+
+// readRecordFrom reads the record beginning at pos and requires its offset to
+// be at least atLeast.
+//
+// Scanning cannot name an exact offset once compaction has run: offsets are
+// preserved while records are dropped, so a segment's offsets ascend with gaps
+// in them. The ordering check is what survives of the exact one — a record that
+// goes backwards is still corruption, and a flipped offset that happens to land
+// further along is the case this cannot see.
 //
 // It reads the header first and the body second, rather than guessing at a read
 // size, because the header is what says how long the record is and a guess
 // would either over-read past the end of the file or under-read and need
 // stitching.
-func (s *Segment) readRecordAt(pos int64, want Offset) (Record, error) {
+func (s *Segment) readRecordFrom(pos int64, atLeast Offset) (Record, error) {
 	header := make([]byte, HeaderLen)
 	n, err := s.file.ReadAt(header, pos)
 	switch {
@@ -178,7 +208,15 @@ func (s *Segment) readRecordAt(pos int64, want Offset) (Record, error) {
 			return Record{}, fmt.Errorf("log: read %s at %d: %w", s.name, pos, err)
 		}
 	}
-	return DecodeAt(buf, want)
+	rec, err := Decode(buf)
+	if err != nil {
+		return Record{}, err
+	}
+	if rec.Offset < atLeast {
+		return Record{}, fmt.Errorf("%w: record at %d carries offset %d, below the %d expected there",
+			ErrCorrupt, pos, rec.Offset, atLeast)
+	}
+	return rec, nil
 }
 
 // noteIndex records a sparse index entry when the segment has grown past the
@@ -280,8 +318,43 @@ func (s *Segment) AppendAll(events []core.Event) (int, Offset, error) {
 	}
 	s.size += int64(len(s.scratch))
 	s.next += Offset(n)
+	s.count += n
 	return n, first, encodeErr
 }
+
+// appendAt writes one record carrying an offset the caller chose.
+//
+// Compaction is the only caller: it copies surviving records into a new file
+// and must keep their original offsets, because an offset a consumer committed
+// has to still mean the same record afterwards. Offsets must still ascend, so
+// this cannot be used to rewrite history, only to leave holes in it.
+func (s *Segment) appendAt(off Offset, e core.Event) error {
+	if off < s.next {
+		return fmt.Errorf("log: cannot write offset %d to %s, which is already at %d", off, s.name, s.next)
+	}
+
+	s.scratch = s.scratch[:0]
+	buf, err := Append(s.scratch, off, e)
+	if err != nil {
+		return err
+	}
+	s.scratch = buf
+
+	if _, err := s.file.Append(buf); err != nil {
+		s.sealed = true
+		return fmt.Errorf("log: append to %s: %w", s.name, err)
+	}
+
+	s.noteIndex(off, s.size)
+	s.size += int64(len(buf))
+	s.next = off + 1
+	s.count++
+	return nil
+}
+
+// records returns how many records the segment holds, which after a compaction
+// is fewer than the range its offsets span.
+func (s *Segment) records() int { return s.count }
 
 // Read returns the record at off.
 func (s *Segment) Read(off Offset) (Record, error) {
@@ -302,8 +375,30 @@ func (s *Segment) Read(off Offset) (Record, error) {
 // length, which is why it is separate from Read: paying the search per record
 // is what makes a scan cost more than the bytes it reads.
 func (s *Segment) locate(off Offset) (int64, error) {
-	if off < s.base || off >= s.next {
-		return 0, fmt.Errorf("%w: %d is outside segment %s, which holds [%d, %d)",
+	pos, found, err := s.locateFrom(off)
+	if err != nil {
+		return 0, err
+	}
+	if found != off {
+		// The scan passed the offset without meeting it, which after
+		// compaction is the ordinary answer rather than a fault: the
+		// record was dropped and its offset was kept as a gap.
+		return 0, fmt.Errorf("%w: %d was compacted out of segment %s", ErrNotFound, off, s.name)
+	}
+	return pos, nil
+}
+
+// locateFrom returns the position and offset of the first record at or after
+// off.
+//
+// This is what a cursor needs and an exact lookup does not: after compaction the
+// answer to "where does offset 40 live" may be "it does not, and 47 is next".
+func (s *Segment) locateFrom(off Offset) (int64, Offset, error) {
+	if off < s.base {
+		off = s.base
+	}
+	if off >= s.next {
+		return 0, 0, fmt.Errorf("%w: %d is outside segment %s, which holds [%d, %d)",
 			ErrNotFound, off, s.name, s.base, s.next)
 	}
 
@@ -312,20 +407,20 @@ func (s *Segment) locate(off Offset) (int64, error) {
 
 	pos, at := entry.pos, entry.offset
 	for pos < s.size {
-		if at == off {
-			return pos, nil
-		}
-		r, err := s.readRecordAt(pos, at)
+		r, err := s.readRecordFrom(pos, at)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
+		}
+		if r.Offset >= off {
+			return pos, r.Offset, nil
 		}
 		pos += int64(r.Len)
-		at++
+		at = r.Offset + 1
 	}
 	// Unreachable while the index and the file agree. It is a returned
 	// error rather than a panic because "the index disagrees with the file"
 	// is a bug worth a message that names the offset.
-	return 0, fmt.Errorf("%w: %d is within segment %s but was not found on disk", ErrNotFound, off, s.name)
+	return 0, 0, fmt.Errorf("%w: %d is within segment %s but was not found on disk", ErrNotFound, off, s.name)
 }
 
 // Sync makes everything appended so far durable.

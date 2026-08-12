@@ -348,6 +348,16 @@ func (l *Log) segmentFor(off Offset) (*Segment, error) {
 	return s, nil
 }
 
+// baseAfter returns the base of the segment following the one that begins at
+// base, which is where a hole running to the end of a segment stops.
+func (l *Log) baseAfter(base Offset) (Offset, bool) {
+	i := sort.Search(len(l.bases), func(i int) bool { return l.bases[i] > base })
+	if i == len(l.bases) {
+		return 0, false
+	}
+	return l.bases[i], true
+}
+
 // First returns the lowest offset the log still holds.
 func (l *Log) First() Offset { return l.bases[0] }
 

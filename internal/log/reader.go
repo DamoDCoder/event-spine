@@ -60,12 +60,17 @@ func (r *Reader) Next() (Record, error) {
 		}
 	}
 
-	rec, err := r.seg.readRecordAt(r.pos, r.next)
+	// The cursor asks for the next record at or after where it stands,
+	// rather than for a particular offset. Compaction drops records and
+	// keeps their offsets as gaps, and a reader that insisted on the next
+	// integer would stop at the first one — the exact bug
+	// docs/log-design.md predicts this design invites.
+	rec, err := r.seg.readRecordFrom(r.pos, r.next)
 	if err != nil {
-		return Record{}, fmt.Errorf("log: read offset %d: %w", r.next, err)
+		return Record{}, fmt.Errorf("log: read at or after offset %d: %w", r.next, err)
 	}
 	r.pos += int64(rec.Len)
-	r.next++
+	r.next = rec.Offset + 1
 	return rec, nil
 }
 
@@ -85,17 +90,40 @@ func (r *Reader) Seek(off Offset) error {
 	return r.seek(off)
 }
 
-// seek points the cursor at an offset the log holds.
+// seek points the cursor at the first record at or after off.
+//
+// A compacted offset is not an error to seek to. The records are gone and their
+// offsets remain as gaps, so a consumer holding an offset from before a
+// compaction — the exact situation docs/log-design.md warns about — resumes at
+// the next surviving record rather than failing.
 func (r *Reader) seek(off Offset) error {
-	seg, err := r.log.segmentFor(off)
-	if err != nil {
-		return err
+	for off < r.log.Next() {
+		seg, err := r.log.segmentFor(off)
+		if err != nil {
+			return err
+		}
+
+		pos, found, err := seg.locateFrom(off)
+		if err == nil {
+			r.seg, r.pos, r.next = seg, pos, found
+			return nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+
+		// Every remaining offset in this segment was compacted away.
+		// The search continues in the next one, whose base is where the
+		// hole ends.
+		next, ok := r.log.baseAfter(seg.Base())
+		if !ok {
+			break
+		}
+		off = next
 	}
-	pos, err := seg.locate(off)
-	if err != nil {
-		return err
-	}
-	r.seg, r.pos, r.next = seg, pos, off
+
+	// Caught up: there is nothing at or after off yet.
+	r.seg, r.pos, r.next = nil, 0, off
 	return nil
 }
 
