@@ -30,6 +30,13 @@ type Report struct {
 	// Points is how many of them were exercised.
 	Points int
 
+	// Compactions, Dropped, and Snapshots are what the clean run actually
+	// did. A matrix that stopped compacting would pass every invariant it
+	// checks, so the coverage is reported rather than assumed.
+	Compactions int
+	Dropped     int
+	Snapshots   int
+
 	// Failures are the crash points whose recovery broke an invariant.
 	Failures []Failure
 }
@@ -57,7 +64,13 @@ func Matrix(seed int64, maxPoints int) (Report, error) {
 		return Report{}, fmt.Errorf("crash: the clean run broke an invariant: %w", err)
 	}
 
-	report := Report{Seed: seed, Ops: clean.Ops()}
+	report := Report{
+		Seed:        seed,
+		Ops:         clean.Ops(),
+		Compactions: w.compactions,
+		Dropped:     w.dropped,
+		Snapshots:   w.snapshots,
+	}
 	points := clean.Ops()
 	if maxPoints > 0 && maxPoints < points {
 		points = maxPoints
@@ -108,6 +121,22 @@ type witness struct {
 	// largestWrite is the biggest single write the run issued, which bounds
 	// how much a torn tail may discard.
 	largestWrite int64
+
+	// compacted records that a compaction returned, after which a durable
+	// record may legitimately be gone: compaction drops superseded records
+	// and keeps their offsets as gaps.
+	compacted bool
+
+	// snapshot is the last snapshot whose write returned, and is therefore
+	// durable. A later one exists only if its rename also completed.
+	snapshot *log.Snapshot
+
+	// Coverage counters. A matrix that quietly stopped compacting would
+	// still pass every invariant it checks, which is the comfortable kind
+	// of broken: these are what let a test assert the run did the work.
+	compactions int
+	dropped     int
+	snapshots   int
 }
 
 // runWorkload appends, syncs, commits, and reads until the machine stops.
@@ -186,12 +215,53 @@ func runWorkload(fs *FS, seed int64) (*witness, error) {
 			w.commits[name] = off
 
 		case 9:
-			if len(w.events) == 0 {
-				continue
-			}
-			off := log.Offset(src.Intn(len(w.events)))
-			if _, err := l.Read(off); err != nil {
-				return w, err
+			switch src.Intn(3) {
+			case 0:
+				// Compaction: the crash point that matters is
+				// between the compacted file being written and
+				// the rename that swaps it in.
+				cs, err := l.CompactAll()
+
+				// Every compaction in the returned slice
+				// finished and swapped its segment in, whether
+				// or not a later one crashed. Crediting them
+				// only when the whole call succeeds would make
+				// the checks below expect records that a
+				// compaction legitimately removed.
+				for _, c := range cs {
+					w.dropped += c.Dropped
+					if c.Dropped > 0 {
+						w.compacted = true
+					}
+				}
+				if err != nil {
+					return w, err
+				}
+				w.compactions++
+
+			case 1:
+				if w.durableCount == 0 {
+					continue
+				}
+				off := log.Offset(src.Intn(w.durableCount + 1))
+				state := fmt.Appendf(nil, "folded to %d", off)
+				if err := l.Snapshot(off, state); err != nil {
+					return w, err
+				}
+				w.snapshot = &log.Snapshot{Offset: off, State: state}
+				w.snapshots++
+
+			case 2:
+				if len(w.events) == 0 {
+					continue
+				}
+				off := log.Offset(src.Intn(len(w.events)))
+				if _, err := l.Read(off); err != nil && !errors.Is(err, log.ErrNotFound) {
+					// After a compaction, an offset that is
+					// gone is the ordinary answer rather
+					// than a fault.
+					return w, err
+				}
 			}
 		}
 	}
@@ -212,6 +282,22 @@ func workloadEvent(src *sim.Source, step int) core.Event {
 		Schema:  1,
 		Payload: payload,
 	}
+}
+
+// supersededLater reports whether a later record shares the key of the one at
+// index i.
+//
+// It is the necessary condition for compaction having dropped that record.
+// Compaction keeps the newest record per key, so a record that is gone must
+// have something newer with its key still on the log; a record that vanished
+// with nothing superseding it is data loss whatever removed it.
+func supersededLater(w *witness, i int) bool {
+	for j := i + 1; j < len(w.events); j++ {
+		if w.events[j].Key == w.events[i].Key {
+			return true
+		}
+	}
+	return false
 }
 
 func encodedSize(events []core.Event) int64 {
@@ -247,13 +333,23 @@ func check(fs *FS, w *witness) error {
 		return err
 	}
 
-	// Every acknowledged record is present and unchanged.
+	// Every acknowledged record is present and unchanged, unless compaction
+	// dropped it — which it may only do when a newer record for the same
+	// key is there to supersede it.
 	for i := range w.durableCount {
+		want := w.events[i]
+
 		got, err := l.Read(log.Offset(i))
+		if errors.Is(err, log.ErrNotFound) && w.compacted {
+			if err := assert(supersededLater(w, i),
+				"record %d is gone and no later record shares its key %q", i, want.Key); err != nil {
+				return err
+			}
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("durable record %d was lost: %w", i, err)
 		}
-		want := w.events[i]
 		if got.Event.Key != want.Key || got.Event.Time != want.Time || got.Event.Schema != want.Schema {
 			return fmt.Errorf("durable record %d came back as %+v, want %+v", i, got.Event, want)
 		}
@@ -262,27 +358,54 @@ func check(fs *FS, w *witness) error {
 		}
 	}
 
-	// Whatever survived is a contiguous run of readable records, not a
-	// prefix with a hole in it.
+	// Whatever survived scans cleanly, with offsets that ascend and stay
+	// inside the log's own bounds. Contiguity is not asserted: compaction
+	// leaves gaps on purpose, and a scan that demanded the next integer
+	// would be the bug the design warns about wearing a test's clothes.
 	r, err := l.Reader(l.First())
 	if err != nil {
 		return fmt.Errorf("reader after the crash: %w", err)
 	}
-	for at := l.First(); ; at++ {
+	previous := l.First()
+	for first := true; ; first = false {
 		got, err := r.Next()
 		if errors.Is(err, log.ErrEndOfLog) {
-			if err := assert(at == l.Next(),
-				"the log scanned to %d but reports its tail at %d", at, l.Next()); err != nil {
-				return err
-			}
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("scanning offset %d after the crash: %w", at, err)
+			return fmt.Errorf("scanning after offset %d: %w", previous, err)
 		}
-		if err := assert(got.Offset == at,
-			"the scan read offset %d where %d was expected", got.Offset, at); err != nil {
+		if !first {
+			if err := assert(got.Offset > previous,
+				"the scan read offset %d after %d", got.Offset, previous); err != nil {
+				return err
+			}
+		}
+		if err := assert(got.Offset >= l.First() && got.Offset < l.Next(),
+			"the scan read offset %d, outside the log's [%d, %d)", got.Offset, l.First(), l.Next()); err != nil {
 			return err
+		}
+		previous = got.Offset
+	}
+
+	// A snapshot whose write returned is on disk, and nothing older than it
+	// replaced it.
+	if w.snapshot != nil {
+		snap, err := l.LatestSnapshot()
+		if err != nil {
+			return fmt.Errorf("the snapshot at %d was lost: %w", w.snapshot.Offset, err)
+		}
+		if err := assert(snap.Offset >= w.snapshot.Offset,
+			"the newest snapshot is at %d, behind the %d that was acknowledged",
+			snap.Offset, w.snapshot.Offset); err != nil {
+			return err
+		}
+		if snap.Offset == w.snapshot.Offset {
+			if err := assert(bytes.Equal(snap.State, w.snapshot.State),
+				"the snapshot at %d came back with %d bytes of state, want %d",
+				snap.Offset, len(snap.State), len(w.snapshot.State)); err != nil {
+				return err
+			}
 		}
 	}
 

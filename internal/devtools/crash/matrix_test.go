@@ -6,7 +6,9 @@ import "testing"
 // test suite as well as under `task sim:crash-matrix`. A handful of seeds here,
 // the full sweep there.
 func TestTheMatrixFindsNoLossAcrossEverySeededCrashPoint(t *testing.T) {
-	for seed := int64(1); seed <= 4; seed++ {
+	var total Report
+
+	for seed := int64(1); seed <= 8; seed++ {
 		report, err := Matrix(seed, 0)
 		if err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
@@ -17,7 +19,27 @@ func TestTheMatrixFindsNoLossAcrossEverySeededCrashPoint(t *testing.T) {
 		for _, f := range report.Failures {
 			t.Errorf("seed %d point %d: %v", seed, f.Point, f.Err)
 		}
+
+		total.Points += report.Points
+		total.Compactions += report.Compactions
+		total.Dropped += report.Dropped
+		total.Snapshots += report.Snapshots
 	}
+
+	// A matrix that stopped compacting or snapshotting would report zero
+	// failures and mean nothing by it. These are the assertions that keep
+	// "no failures" from being a statement about a workload that no longer
+	// does anything interesting.
+	switch {
+	case total.Compactions == 0:
+		t.Error("no seed compacted anything, so the rename path was never crashed into")
+	case total.Dropped == 0:
+		t.Error("compaction ran but dropped no records, so no gaps were ever created")
+	case total.Snapshots == 0:
+		t.Error("no seed took a snapshot")
+	}
+	t.Logf("%d crash points, %d compactions dropping %d records, %d snapshots",
+		total.Points, total.Compactions, total.Dropped, total.Snapshots)
 }
 
 // A crash point is only a reproduction if the run that produced it is

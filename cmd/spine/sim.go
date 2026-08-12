@@ -38,8 +38,11 @@ func simCrashMatrix(args []string) error {
 	}
 
 	var (
-		totalPoints int
-		failed      int
+		totalPoints  int
+		failed       int
+		compactions  int
+		dropped      int
+		snapshotsRun int
 	)
 	for i := range *seeds {
 		seed := *from + int64(i)
@@ -48,6 +51,9 @@ func simCrashMatrix(args []string) error {
 			return fmt.Errorf("seed %d: %w", seed, err)
 		}
 		totalPoints += report.Points
+		compactions += report.Compactions
+		dropped += report.Dropped
+		snapshotsRun += report.Snapshots
 
 		for _, f := range report.Failures {
 			failed++
@@ -56,7 +62,11 @@ func simCrashMatrix(args []string) error {
 		fmt.Printf("seed %d: %d crash points, %d failures\n", seed, report.Points, len(report.Failures))
 	}
 
+	// The coverage line is not decoration. A matrix that stopped compacting
+	// or snapshotting would still report zero failures, and this is what
+	// makes that visible.
 	fmt.Printf("\ncrash-matrix: %d points across %d seeds, %d failures\n", totalPoints, *seeds, failed)
+	fmt.Printf("exercised: %d compactions dropping %d records, %d snapshots\n", compactions, dropped, snapshotsRun)
 	if failed > 0 {
 		return fmt.Errorf("crash-matrix: %d crash points lost data that was acknowledged as durable", failed)
 	}
