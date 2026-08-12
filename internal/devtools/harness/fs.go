@@ -70,6 +70,16 @@ type FS struct {
 	atStep int
 }
 
+// Copy returns a filesystem over an independent copy of the disk, with no
+// faults scheduled.
+//
+// This is how the replay tools look at a running log. Suppressing the operation
+// count is not enough on its own: opening a log also creates the commits file
+// when a group is asked for, caches segment handles, and truncates a torn tail
+// during recovery. Each of those changes what the run does next, so the tools
+// are handed a copy and the run never learns it was watched.
+func (f *FS) Copy() core.FS { return &FS{fs: f.fs.Clone(), byOp: map[int][]Fault{}} }
+
 // AtStep tells the filesystem which workload step is running.
 func (f *FS) AtStep(step int) { f.atStep = step }
 

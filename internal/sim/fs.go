@@ -154,6 +154,44 @@ func (f *FS) Overwrite(name string, off int64, data []byte) error {
 	return nil
 }
 
+// Clone returns an independent copy of the filesystem, live and durable bytes
+// both.
+//
+// It exists for the replay tools, which have to inspect a running log without
+// touching it. Opening a log mutates: recovery truncates a torn tail, a lookup
+// caches a segment handle, and asking for a consumer group creates the commits
+// file if it is missing. Every one of those changes what the run does next, so
+// the tools inspect a copy and leave the original alone. Observation that
+// changes the thing observed is not observation.
+func (f *FS) Clone() *FS {
+	clone := &FS{
+		live:    make(map[string]*inode, len(f.live)),
+		durable: make(map[string]*inode, len(f.durable)),
+	}
+
+	// Names are copied through one shared mapping, so two names for one
+	// inode in the original are two names for one inode in the copy.
+	copied := map[*inode]*inode{}
+	for _, names := range []map[string]*inode{f.live, f.durable} {
+		for _, n := range names {
+			if _, done := copied[n]; done {
+				continue
+			}
+			copied[n] = &inode{
+				data:    append([]byte(nil), n.data...),
+				durable: append([]byte(nil), n.durable...),
+			}
+		}
+	}
+	for name, n := range f.live {
+		clone.live[name] = copied[n]
+	}
+	for name, n := range f.durable {
+		clone.durable[name] = copied[n]
+	}
+	return clone
+}
+
 // Crash discards everything that was not durable, as a power cut would.
 //
 // Files whose directory entry was never synced disappear entirely. Files whose

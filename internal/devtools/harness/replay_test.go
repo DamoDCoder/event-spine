@@ -2,21 +2,48 @@ package harness
 
 import "testing"
 
-// A replay has to be the same execution the checks ran, or a debugger shows a
-// run that never happened.
-func TestAReplayMatchesTheRunItDebugs(t *testing.T) {
-	cfg := Config{Seed: 8, Steps: 3, Faults: []Fault{{Kind: BitFlip, At: 5, Arg: 458021}}}
+// Observing a run must not change it.
+//
+// This is the bug the first walkthrough found in the tool itself: reading the
+// log after every step opens files, those opens were counted as operations, and
+// a fault's position is an ordinal in that stream. Every fault after the first
+// observation moved, so the replay of a failing seed reported that every
+// invariant held — a debugger showing a run that never happened.
+//
+// Comparing outcomes alone did not catch it, because the config it compared
+// passed either way. Comparing the operation stream does.
+func TestAReplayDoesNotDisturbTheRunItRecords(t *testing.T) {
+	configs := []Config{
+		{Seed: 3},
+		{Seed: 8, Steps: 3, Faults: []Fault{{Kind: BitFlip, At: 5, Arg: 458021}}},
+		{Seed: 17, Faults: []Fault{{Kind: Crash, At: 62}}},
+		{Seed: 72, Steps: 29, Faults: []Fault{{Kind: SyncError, At: 41}}},
+		{Seed: 1889, Steps: 32, Faults: []Fault{{Kind: SyncError, At: 53}}},
+	}
 
-	trace := Replay(cfg)
-	direct := Run(cfg)
+	for _, cfg := range configs {
+		quiet := NewFS(cfg.Faults)
+		w, err := runWorkload(quiet, cfg)
+		quietFailure := err
+		if err == nil || isInjected(err) || (w.corrupted && isDamage(err)) {
+			quietFailure = check(quiet, w)
+		}
 
-	switch {
-	case trace.Failure == nil && direct != nil:
-		t.Fatalf("Replay found nothing where Run found %v", direct)
-	case trace.Failure != nil && direct == nil:
-		t.Fatalf("Replay found %v where Run found nothing", trace.Failure)
-	case trace.Failure != nil && trace.Failure.Error() != direct.Error():
-		t.Fatalf("Replay reported %v, Run reported %v", trace.Failure, direct)
+		trace := Replay(cfg)
+
+		if trace.Signature != quiet.Signature() || len(trace.Ops) != quiet.Ops() {
+			t.Fatalf("seed %d: recording changed the run — %d operations %016x traced, %d %016x untraced",
+				cfg.Seed, len(trace.Ops), trace.Signature, quiet.Ops(), quiet.Signature())
+		}
+
+		switch {
+		case trace.Failure == nil && quietFailure != nil:
+			t.Fatalf("seed %d: Replay found nothing where the run found %v", cfg.Seed, quietFailure)
+		case trace.Failure != nil && quietFailure == nil:
+			t.Fatalf("seed %d: Replay found %v where the run found nothing", cfg.Seed, trace.Failure)
+		case trace.Failure != nil && trace.Failure.Error() != quietFailure.Error():
+			t.Fatalf("seed %d: Replay reported %v, the run reported %v", cfg.Seed, trace.Failure, quietFailure)
+		}
 	}
 }
 

@@ -69,7 +69,7 @@ func Replay(cfg Config) Trace {
 
 	trace := Trace{Config: cfg}
 	w, err := observeWorkload(fs, cfg, func(l *log.Log, step int) {
-		trace.States = append(trace.States, snapshotState(l, step))
+		trace.States = append(trace.States, snapshotState(fs, step))
 	})
 
 	trace.Ops = fs.Trace()
@@ -85,9 +85,29 @@ func Replay(cfg Config) Trace {
 	return trace
 }
 
-// snapshotState reads the log and folds it into one comparable value.
-func snapshotState(l *log.Log, step int) State {
+// snapshotState opens a copy of the disk and folds what it holds into one
+// comparable value.
+//
+// The copy is the point. It also changes what the state means, and the change
+// is an improvement: this is what a restart would find at this step, rather
+// than what the running process believes. A record appended and not yet synced
+// is on the disk and shows up here; a torn tail is truncated here exactly as
+// recovery would truncate it.
+func snapshotState(fs *FS, step int) State {
 	state := State{
+		Step:     step,
+		Snapshot: -1,
+		Groups:   map[string]log.Offset{},
+	}
+
+	l, _, err := log.Open(fs.Copy(), log.Config{Segment: log.Options{MaxBytes: 4 << 10, IndexInterval: 256}})
+	if err != nil {
+		state.Err = err
+		return state
+	}
+	defer l.Close()
+
+	state = State{
 		Step:     step,
 		First:    l.First(),
 		Tail:     l.Next(),
