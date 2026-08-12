@@ -142,7 +142,7 @@ func Open(fs core.FS, cfg Config) (*Log, Recovery, error) {
 	l := &Log{fs: fs, cfg: cfg, bases: bases, sealed: map[Offset]*Segment{}}
 
 	if len(bases) == 0 {
-		active, err := CreateSegment(fs, 0, cfg.Segment)
+		active, err := l.createSegment(0)
 		if err != nil {
 			return nil, Recovery{}, err
 		}
@@ -215,6 +215,32 @@ func (l *Log) Append(events ...core.Event) ([]Offset, error) {
 	return offsets, nil
 }
 
+// createSegment creates a segment and makes its name durable.
+//
+// The directory sync is the point. Syncing a file makes its bytes durable and
+// says nothing about the entry that names it: a file whose directory entry was
+// never synced does not exist after a power cut, and every acknowledged record
+// in it goes with the entry. Seed 0001 is that bug — a crash removed a whole
+// segment holding records whose Sync had returned, and recovery reported a
+// healthy empty log rather than a loss.
+//
+// It runs in every durability mode, including os. Creating a segment is a
+// structural operation rather than a durability choice: without it a crash can
+// leave a hole in the middle of the segment list instead of a torn tail at the
+// end, and recovery is built to expect the second. The cost is one fsync per
+// segment, which is once per 64 MiB by default.
+func (l *Log) createSegment(base Offset) (*Segment, error) {
+	seg, err := CreateSegment(l.fs, base, l.cfg.Segment)
+	if err != nil {
+		return nil, err
+	}
+	if err := l.fs.Sync(); err != nil {
+		seg.Close()
+		return nil, fmt.Errorf("log: sync the directory after creating %s: %w", seg.Name(), err)
+	}
+	return seg, nil
+}
+
 // roll seals the active segment and starts a new one at the next offset.
 //
 // The old segment is synced before it is sealed, whatever the durability mode
@@ -232,7 +258,7 @@ func (l *Log) roll() error {
 	l.active.Seal()
 
 	base := l.active.Next()
-	next, err := CreateSegment(l.fs, base, l.cfg.Segment)
+	next, err := l.createSegment(base)
 	if err != nil {
 		return err
 	}

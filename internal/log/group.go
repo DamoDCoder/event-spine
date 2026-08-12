@@ -222,6 +222,13 @@ func (l *Log) openCommits() error {
 	seg, _, err := openNamed(l.fs, CommitsFile, 0, opts, true)
 	if errors.Is(err, core.ErrNotExist) {
 		seg, err = createNamed(l.fs, CommitsFile, 0, opts)
+		if err == nil {
+			// The directory entry, for the same reason a segment
+			// needs one: a commits log that a crash can remove
+			// entirely would silently reset every consumer group to
+			// the beginning. See seed 0001.
+			err = l.fs.Sync()
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("log: open %s: %w", CommitsFile, err)
