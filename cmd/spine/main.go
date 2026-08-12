@@ -27,6 +27,10 @@ func run(args []string) error {
 	switch args[0] {
 	case "verify":
 		return verify(args[1:])
+	case "sim":
+		return simulate(args[1:])
+	case "repro":
+		return repro(args[1:])
 	case "-h", "--help", "help":
 		usage()
 		return nil
@@ -36,15 +40,24 @@ func run(args []string) error {
 	}
 }
 
-// usage lists only what exists. The Taskfile names repro, bench, and sim
-// subcommands that arrive with the milestones that earn them; printing them
-// here before they work would be a promise the binary cannot keep.
+// usage lists only what exists. The Taskfile names subcommands that arrive with
+// the milestones that earn them; printing them here before they work would be a
+// promise the binary cannot keep.
 func usage() {
 	fmt.Fprint(os.Stderr, `usage: spine <subcommand>
 
 subcommands:
   verify determinism [--seeds N] [--commands N] [--accounts N] [--repeat N]
         Run N seeds and print one digest over all of them.
+
+  sim crash-matrix [--seed N] [--seeds N] [--points N]
+        Crash the log at every filesystem operation and check what survived.
+
+  sim corpus [--dir seeds]
+        Replay every crash point in the regression corpus.
+
+  repro --seed N [--point N]
+        Reconstruct one failure exactly.
 
   help  Print this message.
 `)

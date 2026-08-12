@@ -71,11 +71,13 @@ tasks:
   # -------------------------------------------------------------- simulation
 
   repro:
-    desc: 'Reconstruct a specific failure exactly. Usage: task repro SEED=8412'
+    desc: 'Reconstruct a specific failure exactly. Usage: task repro SEED=8412 POINT=7'
     requires:
       vars: [SEED]
+    vars:
+      POINT: '{{.POINT | default "0"}}'
     cmds:
-      - go run ./cmd/spine repro --seed {{.SEED}}
+      - go run ./cmd/spine repro --seed {{.SEED}} --point {{.POINT}}
 
   sim:corpus:
     desc: Replay every seed in the regression corpus
