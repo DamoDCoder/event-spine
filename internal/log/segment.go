@@ -121,8 +121,13 @@ type Segment struct {
 
 // CreateSegment makes a new empty segment beginning at base.
 func CreateSegment(fs core.FS, base Offset, opts Options) (*Segment, error) {
+	return createNamed(fs, SegmentName(base), base, opts)
+}
+
+// createNamed makes a record file whose name does not encode its base offset.
+// See openNamed for why that exists.
+func createNamed(fs core.FS, name string, base Offset, opts Options) (*Segment, error) {
 	opts = opts.withDefaults()
-	name := SegmentName(base)
 	f, err := fs.Create(name)
 	if err != nil {
 		return nil, fmt.Errorf("log: create segment %s: %w", name, err)

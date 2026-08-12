@@ -101,6 +101,10 @@ type Log struct {
 	active    *Segment
 	sinceSync int
 	lastSync  core.Time
+
+	// commits is the consumer groups' offsets log, opened on the first
+	// mention of a group. A log nobody consumes creates no file to say so.
+	commits *commits
 }
 
 // Open opens or creates a log in the directory the filesystem is rooted at.
@@ -341,6 +345,12 @@ func (l *Log) Segments() []Offset {
 // every file has been closed: returning early would leak the rest.
 func (l *Log) Close() error {
 	var first error
+	if l.commits != nil {
+		if err := l.commits.seg.Close(); err != nil {
+			first = err
+		}
+		l.commits = nil
+	}
 	for _, base := range l.bases {
 		s := l.sealed[base]
 		if base == l.active.Base() {

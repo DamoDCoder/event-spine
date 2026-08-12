@@ -82,12 +82,23 @@ func OpenSealedSegment(fs core.FS, name string, opts Options) (*Segment, error) 
 }
 
 func openSegment(fs core.FS, name string, opts Options, truncate bool) (*Segment, Recovery, error) {
-	opts = opts.withDefaults()
-
 	base, ok := ParseSegmentName(name)
 	if !ok {
 		return nil, Recovery{}, fmt.Errorf("log: %q is not a segment file name", name)
 	}
+	return openNamed(fs, name, base, opts, truncate)
+}
+
+// openNamed opens a record file whose name does not encode its base offset.
+//
+// The commits log is one: it lives in the same directory as the segments and
+// must not be mistaken for one, so it carries a name no segment can have. It is
+// still a file full of framed records, and reusing the segment gives it the
+// same checksums and the same torn-tail recovery rather than a second
+// implementation of both.
+func openNamed(fs core.FS, name string, base Offset, opts Options, truncate bool) (*Segment, Recovery, error) {
+	opts = opts.withDefaults()
+
 	f, err := fs.Open(name)
 	if err != nil {
 		return nil, Recovery{}, fmt.Errorf("log: open segment %s: %w", name, err)

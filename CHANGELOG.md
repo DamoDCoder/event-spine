@@ -32,6 +32,8 @@ grouped under `Unreleased`.
   percentiles, recovery time, and cold-segment read cost, with the run committed
   to `bench/log.txt`.
 - `log.Reader`: a cursor over the log, which is how a consumer streams it.
+- Consumer groups: explicit commits in their own fsynced commits log, kept as
+  records so the commit history replays.
 
 ### Decision Notes
 
