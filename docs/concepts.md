@@ -367,4 +367,5 @@ device behind it, or it is a claim about a belief.
 | What the filesystem model proves and does not | [m2-filesystem-model.md](decisions/m2-filesystem-model.md) |
 | The log's measured throughput, and the crash matrix's findings | [m2-owned-log.md](decisions/m2-owned-log.md) |
 | The fault catalogue, what the sweep found, and how the corpus rots | [m3-simulation-harness.md](decisions/m3-simulation-harness.md) |
+| The replay tools, and the tool that displaced what it was showing | [m4-replay-devtools.md](decisions/m4-replay-devtools.md) |
 | Record layout, segments, recovery, durability modes | [log-design.md](log-design.md) |

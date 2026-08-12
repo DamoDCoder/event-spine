@@ -47,8 +47,13 @@ grouped under `Unreleased`.
   fault configurations; invariants checked after every step; automatic
   minimization; `spine sim sweep`; and the M3 result in
   `docs/decisions/m3-simulation-harness.md`.
-- `ops` in seed front matter, and the `drifted` warning that reports when a
-  stored seed no longer fires where it was recorded.
+- `ops` and `signature` in seed front matter, and the `drifted` warning that
+  reports when a stored seed no longer fires where it was recorded.
+- `spine replay`: scrub a seed step by step, inspect one step in full, list the
+  filesystem operations with the faults that fired on them, or diff a failing
+  run against the same seed with no faults. The M4 result is in
+  `docs/decisions/m4-replay-devtools.md`, and `task demo:replay` reproduces the
+  walkthrough in `docs/walkthrough-replay.md`.
 
 ### Fixed
 
@@ -239,6 +244,27 @@ M3, on 2026-08-12:
   that is 84 now: `crash@7` has not been the crash that failed for a milestone.
   Found by looking rather than by a test, which is the uncomfortable part.
 - 2,000 seeds, 0 failures, after the fixes.
+
+M4, on 2026-08-13:
+
+- The gate held: one bug diagnosed from a corpus failure to its root cause in
+  four commands, with no print statement added. The transcript is
+  `docs/walkthrough-replay.md` and `task demo:replay` regenerates it by
+  reverting one commit in a scratch worktree.
+- The first version of the tool failed the gate silently. Replaying the failing
+  seed reported that every invariant held, because reading the log after each
+  step opened files and a fault's position is an ordinal in the stream those
+  opens joined. The debugger moved the fault it was built to show.
+- Suppressing the operation count fixed the arithmetic and not the problem.
+  Opening a log also creates the commits file, caches segment handles, and
+  truncates a torn tail. The tools now inspect a copy of the disk, and the run
+  never learns it was watched.
+- The test that should have caught it compared outcomes for one configuration
+  that passed either way. Its replacement compares the operation stream across
+  five configurations, which fails whether or not a bug is present to expose it.
+- Seeds now carry a signature over the whole operation stream, not only its
+  length. A stream reordered without changing length is drift a count calls
+  unchanged.
 
 Carried over from the ideas cradle, where this project was designed:
 

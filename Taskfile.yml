@@ -110,6 +110,11 @@ tasks:
     cmds:
       - go run ./cmd/spine sim sweep --seed {{.SEED}} --count {{.COUNT}} --minimize --out seeds
 
+  demo:replay:
+    desc: Reproduce docs/walkthrough-replay.md by reverting one fix in a scratch worktree
+    cmds:
+      - ./scripts/demo-replay.sh
+
   # ------------------------------------------------------------------- gates
 
   ci:
