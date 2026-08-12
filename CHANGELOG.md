@@ -37,6 +37,10 @@ grouped under `Unreleased`.
 - `internal/devtools/crash`, `spine sim crash-matrix`, `spine sim corpus`, and
   `spine repro`: crash the log at every filesystem operation and check what
   recovery kept.
+- Compaction: the newest record per key in a sealed segment, swapped in by
+  rename, with the offsets of dropped records left behind as gaps.
+- Snapshots: a serialized projection and the offset it was folded to, framed as
+  a record so a torn one is detectable.
 
 ### Fixed
 
@@ -103,6 +107,29 @@ M2 crash matrix, on 2026-08-12:
 - After the fix: 9,960 crash points across 200 seeds, no loss. That is the M2
   recovery claim's evidence, and it is a simulation claim rather than a hardware
   one — the caveat above still stands.
+
+M2 compaction and snapshots, on 2026-08-12:
+
+- Making the read path tolerate gaps came before compaction could create any.
+  The recovery scan, the index lookup, and the cursor all assumed offsets were
+  contiguous, and each would have called a compacted segment corrupt. They now
+  require offsets to ascend rather than to increment, which is what survives of
+  the exact check once records can legitimately be missing.
+- Compaction's scope is one segment. A key whose newest record lives in a later
+  segment keeps its older copy, so this reclaims less than a whole-log pass
+  would. Recorded as a limitation rather than described as a design: a
+  cross-segment pass needs to read every later segment to know what is
+  superseded, and the crash safety and the gaps were the parts worth testing
+  first.
+- Seed 0017 caught the harness rather than the log, and is committed saying so.
+  Crediting a partially-crashed `CompactAll` with none of its finished
+  compactions made the checker demand records that compaction had legitimately
+  removed. A checker that is wrong in this direction hides every later failure
+  of the thing it checks.
+- The crash matrix now reports what it exercised. 300 seeds, 18,760 crash
+  points, 419 compactions dropping 3,154 records, 354 snapshots, no loss. Those
+  counters are asserted in the test suite, because a matrix that quietly stopped
+  compacting would report zero failures and mean nothing by it.
 
 M2 throughput, measured on 2026-08-12, darwin/arm64, Apple M2 Max, single
 producer, 64 byte records, `task bench:log`, full run in `bench/log.txt`:
