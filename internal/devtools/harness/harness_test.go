@@ -1,4 +1,4 @@
-package crash
+package harness
 
 import "testing"
 
@@ -13,14 +13,14 @@ func TestTheMatrixFindsNoLossAcrossEverySeededCrashPoint(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
 		}
-		if report.Points == 0 {
+		if report.Runs == 0 {
 			t.Fatalf("seed %d exercised no crash points", seed)
 		}
 		for _, f := range report.Failures {
-			t.Errorf("seed %d point %d: %v", seed, f.Point, f.Err)
+			t.Errorf("seed %d %s: %v", seed, FormatFaults(f.Config.Faults), f.Err)
 		}
 
-		total.Points += report.Points
+		total.Runs += report.Runs
 		total.Compactions += report.Compactions
 		total.Dropped += report.Dropped
 		total.Snapshots += report.Snapshots
@@ -39,7 +39,7 @@ func TestTheMatrixFindsNoLossAcrossEverySeededCrashPoint(t *testing.T) {
 		t.Error("no seed took a snapshot")
 	}
 	t.Logf("%d crash points, %d compactions dropping %d records, %d snapshots",
-		total.Points, total.Compactions, total.Dropped, total.Snapshots)
+		total.Runs, total.Compactions, total.Dropped, total.Snapshots)
 }
 
 // A crash point is only a reproduction if the run that produced it is
@@ -47,12 +47,12 @@ func TestTheMatrixFindsNoLossAcrossEverySeededCrashPoint(t *testing.T) {
 // same order, or a corpus entry names a point that no longer means what it did.
 func TestTheWorkloadIsReproducible(t *testing.T) {
 	for seed := int64(1); seed <= 4; seed++ {
-		first := NewFS(0)
-		if _, err := runWorkload(first, seed); err != nil {
+		first := NewFS(nil)
+		if _, err := runWorkload(first, Config{Seed: seed}); err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
 		}
-		second := NewFS(0)
-		if _, err := runWorkload(second, seed); err != nil {
+		second := NewFS(nil)
+		if _, err := runWorkload(second, Config{Seed: seed}); err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
 		}
 		if first.Ops() != second.Ops() {
@@ -64,8 +64,8 @@ func TestTheWorkloadIsReproducible(t *testing.T) {
 // The harness has to be able to fail. A matrix that passes because it never
 // crashes anything is the most comfortable kind of broken.
 func TestTheCrashPointActuallyCrashes(t *testing.T) {
-	fs := NewFS(3)
-	if _, err := runWorkload(fs, 1); err == nil {
+	fs := NewFS([]Fault{{Kind: Crash, At: 3}})
+	if _, err := runWorkload(fs, Config{Seed: 1}); err == nil {
 		t.Fatal("a workload with a crash point at operation 3 ran to completion")
 	}
 	if !fs.Crashed() {

@@ -9,16 +9,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DamoDCoder/event-spine/internal/devtools/crash"
+	"github.com/DamoDCoder/event-spine/internal/devtools/harness"
 )
 
 func simulate(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("sim: a simulation is required, try: sim crash-matrix")
+		return fmt.Errorf("sim: a simulation is required, try: sim sweep")
 	}
 	switch args[0] {
 	case "crash-matrix":
 		return simCrashMatrix(args[1:])
+	case "sweep":
+		return simSweep(args[1:])
 	case "corpus":
 		return simCorpus(args[1:])
 	default:
@@ -37,46 +39,91 @@ func simCrashMatrix(args []string) error {
 		return err
 	}
 
-	var (
-		totalPoints  int
-		failed       int
-		compactions  int
-		dropped      int
-		snapshotsRun int
-	)
+	var total harness.Report
+
 	for i := range *seeds {
 		seed := *from + int64(i)
-		report, err := crash.Matrix(seed, *points)
+		report, err := harness.Matrix(seed, *points)
 		if err != nil {
 			return fmt.Errorf("seed %d: %w", seed, err)
 		}
-		totalPoints += report.Points
-		compactions += report.Compactions
-		dropped += report.Dropped
-		snapshotsRun += report.Snapshots
-
 		for _, f := range report.Failures {
-			failed++
-			fmt.Printf("FAIL seed %d point %d: %v\n", seed, f.Point, f.Err)
+			fmt.Printf("FAIL seed %d %s: %v\n", seed, harness.FormatFaults(f.Config.Faults), f.Err)
 		}
-		fmt.Printf("seed %d: %d crash points, %d failures\n", seed, report.Points, len(report.Failures))
+		fmt.Printf("seed %d: %d crash points, %d failures\n", seed, report.Runs, len(report.Failures))
+
+		total.Runs += report.Runs
+		total.Failures = append(total.Failures, report.Failures...)
+		total.Compactions += report.Compactions
+		total.Dropped += report.Dropped
+		total.Snapshots += report.Snapshots
 	}
 
 	// The coverage line is not decoration. A matrix that stopped compacting
 	// or snapshotting would still report zero failures, and this is what
 	// makes that visible.
-	fmt.Printf("\ncrash-matrix: %d points across %d seeds, %d failures\n", totalPoints, *seeds, failed)
-	fmt.Printf("exercised: %d compactions dropping %d records, %d snapshots\n", compactions, dropped, snapshotsRun)
-	if failed > 0 {
-		return fmt.Errorf("crash-matrix: %d crash points lost data that was acknowledged as durable", failed)
+	fmt.Printf("\ncrash-matrix: %d points across %d seeds, %d failures\n", total.Runs, *seeds, len(total.Failures))
+	fmt.Printf("exercised: %d compactions dropping %d records, %d snapshots\n",
+		total.Compactions, total.Dropped, total.Snapshots)
+	if len(total.Failures) > 0 {
+		return fmt.Errorf("crash-matrix: %d crash points lost data that was acknowledged as durable", len(total.Failures))
 	}
 	return nil
 }
 
-// simCorpus replays every seed in the regression corpus.
+// simSweep runs fresh seeds with swarm-randomized fault configurations.
+func simSweep(args []string) error {
+	fs := flag.NewFlagSet("sim sweep", flag.ContinueOnError)
+	var (
+		count    = fs.Int("count", 1000, "how many seeds to run")
+		from     = fs.Int64("seed", 1, "first seed")
+		minimize = fs.Bool("minimize", false, "shrink each failure before reporting it")
+		out      = fs.String("out", "", "directory to write new corpus entries to")
+	)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	report := harness.Sweep(*from, *count, *minimize)
+
+	for _, f := range report.Failures {
+		fmt.Printf("FAIL seed %d steps %d faults %s\n     %v\n",
+			f.Config.Seed, f.Config.Steps, harness.FormatFaults(f.Config.Faults), f.Err)
+		if *out == "" {
+			continue
+		}
+		path, err := writeCorpusEntry(*out, f)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("     written to %s\n", path)
+	}
+
+	fmt.Printf("\nsweep: %d seeds, %d failures\n", report.Runs, len(report.Failures))
+	fmt.Printf("injected: %s\n", formatCoverage(report.Faults))
+	fmt.Printf("exercised: %d compactions dropping %d records, %d snapshots (sampled)\n",
+		report.Compactions, report.Dropped, report.Snapshots)
+
+	if len(report.Failures) > 0 {
+		return fmt.Errorf("sweep: %d seeds broke an invariant", len(report.Failures))
+	}
+	return nil
+}
+
+// formatCoverage renders the fault histogram in a fixed order, because a map
+// ranged straight into output would report a different line every run.
+func formatCoverage(faults map[harness.Kind]int) string {
+	parts := make([]string, 0, len(harness.Kinds))
+	for _, kind := range harness.Kinds {
+		parts = append(parts, fmt.Sprintf("%s %d", kind, faults[kind]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// simCorpus replays every configuration in the regression corpus.
 //
-// A corpus entry is a crash point that once broke an invariant. Replaying them
-// all is the regression suite, and it grows for free.
+// A corpus entry is a run that once broke an invariant. Replaying them all is
+// the regression suite, and it grows for free.
 func simCorpus(args []string) error {
 	fs := flag.NewFlagSet("sim corpus", flag.ContinueOnError)
 	dir := fs.String("dir", "seeds", "directory holding the seed corpus")
@@ -95,12 +142,12 @@ func simCorpus(args []string) error {
 
 	var failed int
 	for _, e := range entries {
-		if err := crash.Replay(e.seed, e.point); err != nil {
+		if err := harness.Run(e.cfg); err != nil {
 			failed++
-			fmt.Printf("FAIL %s (seed %d point %d): %v\n", e.file, e.seed, e.point, err)
+			fmt.Printf("FAIL %s (seed %d %s): %v\n", e.file, e.cfg.Seed, harness.FormatFaults(e.cfg.Faults), err)
 			continue
 		}
-		fmt.Printf("ok   %s (seed %d point %d)\n", e.file, e.seed, e.point)
+		fmt.Printf("ok   %s (seed %d %s)\n", e.file, e.cfg.Seed, harness.FormatFaults(e.cfg.Faults))
 	}
 
 	fmt.Printf("\ncorpus: %d seeds, %d failures\n", len(entries), failed)
@@ -113,8 +160,10 @@ func simCorpus(args []string) error {
 func repro(args []string) error {
 	fs := flag.NewFlagSet("repro", flag.ContinueOnError)
 	var (
-		seed  = fs.Int64("seed", 0, "the seed to reconstruct")
-		point = fs.Int("point", 0, "the crash point, or 0 to run the whole matrix for the seed")
+		seed   = fs.Int64("seed", 0, "the seed to reconstruct")
+		steps  = fs.Int("steps", 0, "workload steps, or 0 for the default")
+		faults = fs.String("faults", "", "faults to inject, as kind@position[:arg], space separated")
+		point  = fs.Int("point", 0, "shorthand for --faults crash@N")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -123,34 +172,85 @@ func repro(args []string) error {
 		return fmt.Errorf("repro: --seed is required")
 	}
 
-	if *point > 0 {
-		if err := crash.Replay(*seed, *point); err != nil {
-			return fmt.Errorf("seed %d point %d reproduces: %w", *seed, *point, err)
+	spec := *faults
+	if spec == "" && *point > 0 {
+		spec = fmt.Sprintf("crash@%d", *point)
+	}
+
+	if spec != "" {
+		parsed, err := harness.ParseFaults(spec)
+		if err != nil {
+			return err
 		}
-		fmt.Printf("seed %d point %d: no failure\n", *seed, *point)
+		cfg := harness.Config{Seed: *seed, Steps: *steps, Faults: parsed}
+		if err := harness.Run(cfg); err != nil {
+			return fmt.Errorf("seed %d %s reproduces: %w", *seed, harness.FormatFaults(parsed), err)
+		}
+		fmt.Printf("seed %d %s: no failure\n", *seed, harness.FormatFaults(parsed))
 		return nil
 	}
 
-	report, err := crash.Matrix(*seed, 0)
+	// With no faults named, run the crash matrix for the seed: every
+	// filesystem operation in turn.
+	report, err := harness.Matrix(*seed, 0)
 	if err != nil {
 		return err
 	}
 	for _, f := range report.Failures {
-		fmt.Printf("FAIL seed %d point %d: %v\n", *seed, f.Point, f.Err)
+		fmt.Printf("FAIL seed %d %s: %v\n", *seed, harness.FormatFaults(f.Config.Faults), f.Err)
 	}
-	fmt.Printf("seed %d: %d crash points, %d failures\n", *seed, report.Points, len(report.Failures))
+	fmt.Printf("seed %d: %d crash points, %d failures\n", *seed, report.Runs, len(report.Failures))
 	if len(report.Failures) > 0 {
 		return fmt.Errorf("seed %d reproduces at %d points", *seed, len(report.Failures))
 	}
 	return nil
 }
 
-// corpusEntry is one seed file: the two integers a failure reduces to, and the
+// corpusEntry is one seed file: the configuration a failure reduces to, and the
 // file that explains it.
 type corpusEntry struct {
-	file  string
-	seed  int64
-	point int
+	file string
+	cfg  harness.Config
+}
+
+// writeCorpusEntry records a fresh failure as a seed file.
+//
+// It is written with `fixed_in: pending`, because a sweep finds bugs and does
+// not fix them. The corpus is expected to be red until somebody does.
+func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
+	path := filepath.Join(dir, fmt.Sprintf("%04d.md", f.Config.Seed))
+	if _, err := os.Stat(path); err == nil {
+		return "", fmt.Errorf("corpus: %s already exists; a seed is never overwritten", path)
+	}
+
+	body := fmt.Sprintf(`---
+seed: %d
+steps: %d
+faults: %s
+found: (fill in)
+milestone: M3
+fixed_in: pending
+---
+
+Found by `+"`task sim:sweep`"+`. The invariant it broke:
+
+    %v
+
+Replace this paragraph with what went wrong and why, once it is understood. A
+seed file whose body is still the sweep's own output is a bug report nobody has
+read yet.
+
+`+"```"+`
+task repro SEED=%d FAULTS="%s"
+`+"```"+`
+`,
+		f.Config.Seed, f.Config.Steps, harness.FormatFaults(f.Config.Faults), f.Err,
+		f.Config.Seed, harness.FormatFaults(f.Config.Faults))
+
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return "", fmt.Errorf("corpus: write %s: %w", path, err)
+	}
+	return path, nil
 }
 
 // loadCorpus reads the seed files' front matter.
@@ -183,18 +283,13 @@ func loadCorpus(dir string) ([]corpusEntry, error) {
 	}
 
 	// Sorted, so a corpus run reports in the same order every time.
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].seed != entries[j].seed {
-			return entries[i].seed < entries[j].seed
-		}
-		return entries[i].point < entries[j].point
-	})
+	sort.Slice(entries, func(i, j int) bool { return entries[i].cfg.Seed < entries[j].cfg.Seed })
 	return entries, nil
 }
 
 func parseCorpusEntry(file, body string) (corpusEntry, error) {
 	entry := corpusEntry{file: file}
-	var haveSeed bool
+	var haveSeed, haveFaults bool
 
 	for line := range strings.SplitSeq(body, "\n") {
 		key, value, ok := strings.Cut(line, ":")
@@ -202,27 +297,48 @@ func parseCorpusEntry(file, body string) (corpusEntry, error) {
 			continue
 		}
 		value = strings.TrimSpace(value)
+
 		switch strings.TrimSpace(key) {
 		case "seed":
 			n, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
 				return entry, fmt.Errorf("corpus: %s: seed %q is not a number", file, value)
 			}
-			entry.seed, haveSeed = n, true
+			entry.cfg.Seed, haveSeed = n, true
+
+		case "steps":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return entry, fmt.Errorf("corpus: %s: steps %q is not a number", file, value)
+			}
+			entry.cfg.Steps = n
+
+		case "faults":
+			faults, err := harness.ParseFaults(value)
+			if err != nil {
+				return entry, fmt.Errorf("corpus: %s: %w", file, err)
+			}
+			entry.cfg.Faults, haveFaults = faults, true
+
 		case "point":
+			// The shorthand the corpus used before there was a
+			// fault catalogue. Kept because seeds are never
+			// deleted, and a seed nobody can replay is deleted in
+			// every sense that matters.
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return entry, fmt.Errorf("corpus: %s: point %q is not a number", file, value)
 			}
-			entry.point = n
+			entry.cfg.Faults = []harness.Fault{{Kind: harness.Crash, At: n}}
+			haveFaults = true
 		}
 	}
 
 	if !haveSeed {
 		return entry, fmt.Errorf("corpus: %s has no seed in its front matter", file)
 	}
-	if entry.point <= 0 {
-		return entry, fmt.Errorf("corpus: %s has no crash point in its front matter", file)
+	if !haveFaults {
+		return entry, fmt.Errorf("corpus: %s names no faults in its front matter", file)
 	}
 	return entry, nil
 }

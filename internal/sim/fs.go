@@ -126,6 +126,34 @@ func (f *FS) Sync() error {
 	return nil
 }
 
+// Overwrite replaces bytes already on the disk, which no caller of core.FS can
+// do.
+//
+// This is bit rot, and it is deliberately not reachable through the interface:
+// the log only ever appends, and an interface that cannot overwrite cannot
+// corrupt a sealed segment by accident. A fault injector simulating a bad cable
+// has to reach past the interface to do it, which is the right amount of
+// friction.
+//
+// It changes the durable bytes as well as the live ones, because a flipped bit
+// is on the platter. A crash that healed corruption would be a simulator making
+// the disk more trustworthy than disks are.
+func (f *FS) Overwrite(name string, off int64, data []byte) error {
+	n, ok := f.live[name]
+	if !ok {
+		return fmt.Errorf("sim: overwrite %s: %w", name, core.ErrNotExist)
+	}
+	if off < 0 || off+int64(len(data)) > int64(len(n.data)) {
+		return fmt.Errorf("sim: overwrite %s at %d: past the end of a %d byte file", name, off, len(n.data))
+	}
+
+	copy(n.data[off:], data)
+	if off+int64(len(data)) <= int64(len(n.durable)) {
+		copy(n.durable[off:], data)
+	}
+	return nil
+}
+
 // Crash discards everything that was not durable, as a power cut would.
 //
 // Files whose directory entry was never synced disappear entirely. Files whose
