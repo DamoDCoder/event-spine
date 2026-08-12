@@ -31,6 +31,7 @@ grouped under `Unreleased`.
 - `internal/devtools/bench` and `task bench:log`: append throughput, latency
   percentiles, recovery time, and cold-segment read cost, with the run committed
   to `bench/log.txt`.
+- `log.Reader`: a cursor over the log, which is how a consumer streams it.
 
 ### Decision Notes
 
@@ -128,6 +129,20 @@ M2 throughput after buffering the write, same machine and same day:
 - Latency percentiles are unchanged: 6.7 µs p99 in `batch`, well inside the 2 ms
   budget. Recovery and read costs are unchanged, since neither touches the write
   path.
+
+M2 reads, same machine, after adding the cursor:
+
+- A cursor scan costs 863 ns per 64 byte record against 28.4 µs for the same
+  record fetched by offset — 33 times cheaper, at 2 allocations against 97. The
+  difference is the sparse index search and the forward decode that a random
+  read repeats every time: at a 4 KiB index interval, finding one 64 byte record
+  means decoding about 45 of them.
+- The gap narrows to 3.2x at 1 KiB records (1,132 ns against 3,595 ns), for the
+  same reason in reverse: larger records mean fewer of them between index
+  entries, so a random read has less to walk.
+- This is the number that says a streaming consumer must use a `Reader` rather
+  than a loop over `Read`, and it is why the index interval is configuration
+  rather than a constant.
 
 Carried over from the ideas cradle, where this project was designed:
 
