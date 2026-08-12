@@ -1,8 +1,17 @@
 # M2 — What The Filesystem Model Proves, And What It Does Not
 
 **Date:** 2026-08-10
-**Status:** in progress. This note is written before the log rather than after,
-and it will be updated as the log gives the model more surface to be wrong on.
+**Status:** settled. This note was written before the log rather than after, and
+the log has since been built on it — see
+[m2-owned-log.md](m2-owned-log.md) for the milestone's outcome.
+
+Rule 2 below earned its place immediately: the crash matrix's first run found
+that the log synced segment files and never the directory naming them, which is
+a bug only a model that enforces rule 2 can see. A model written to agree with
+the implementation would have found nothing.
+
+The section on what is still only a belief has not changed. Nothing here has yet
+been tested against real power loss.
 
 ## Why This Exists Before The Log
 

@@ -41,6 +41,7 @@ grouped under `Unreleased`.
   rename, with the offsets of dropped records left behind as gaps.
 - Snapshots: a serialized projection and the offset it was folded to, framed as
   a record so a torn one is detectable.
+- The M2 result, `docs/decisions/m2-owned-log.md`.
 
 ### Fixed
 
@@ -130,6 +131,12 @@ M2 compaction and snapshots, on 2026-08-12:
   points, 419 compactions dropping 3,154 records, 354 snapshots, no loss. Those
   counters are asserted in the test suite, because a matrix that quietly stopped
   compacting would report zero failures and mean nothing by it.
+- Two costs turned up in the republished benchmark run and are recorded rather
+  than tuned away. Gap tolerance costs a random read 3 allocations and about 2%,
+  because a lookup must now decode the record it lands on to learn whether it is
+  the one asked for. The directory sync that fixed seed 0001 costs about 10% of
+  batched `os` throughput — 10.7 µs to 11.9 µs per 256 record call — which is
+  one `F_FULLFSYNC` spread across the ~2,900 calls a 64 MiB segment holds.
 
 M2 throughput, measured on 2026-08-12, darwin/arm64, Apple M2 Max, single
 producer, 64 byte records, `task bench:log`, full run in `bench/log.txt`:
