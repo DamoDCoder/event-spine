@@ -83,15 +83,18 @@ func checkDurableRecords(l *log.Log, w *witness) error {
 		got, err := l.Read(log.Offset(i))
 		switch {
 		case err == nil:
+		case err != nil && w.corrupted:
+			// Damaged bytes may be unreadable or truncated away.
+			// Checked before compaction's rule, because a record
+			// that corruption removed has no reason to satisfy it —
+			// judging one by the other is how a checker reports a
+			// bug in the wrong component.
+			continue
 		case errors.Is(err, log.ErrNotFound) && w.compacted:
 			if err := assert(supersededLater(w, i),
 				"record %d is gone and no later record shares its key %q", i, want.Key); err != nil {
 				return err
 			}
-			continue
-		case w.corrupted:
-			// Damaged bytes may be unreadable or truncated away.
-			// What follows is the part corruption does not excuse.
 			continue
 		default:
 			return fmt.Errorf("durable record %d was lost: %w", i, err)

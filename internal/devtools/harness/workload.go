@@ -223,17 +223,18 @@ func (w *witness) act(l *log.Log, src *sim.Source, step int) error {
 func (w *witness) maintain(l *log.Log, src *sim.Source) error {
 	switch src.Intn(3) {
 	case 0:
-		cs, err := l.CompactAll()
+		// Marked before the call, not after it. A compaction swaps its
+		// segment in by rename and then syncs the directory, so a
+		// failure reported by the second has already been done by the
+		// first: CompactAll can return an error for work that took
+		// effect. Crediting only what it returns makes the checks
+		// demand records a compaction legitimately removed — which is
+		// seeds/0017.md, and this is the same mistake one layer up.
+		w.compacted = true
 
-		// Every compaction in the returned slice finished and swapped
-		// its segment in, whether or not a later one failed. Crediting
-		// them only when the whole call succeeds would make the checks
-		// expect records that a compaction legitimately removed.
+		cs, err := l.CompactAll()
 		for _, c := range cs {
 			w.dropped += c.Dropped
-			if c.Dropped > 0 {
-				w.compacted = true
-			}
 		}
 		if err != nil {
 			return err

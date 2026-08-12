@@ -40,6 +40,14 @@ type Compaction struct {
 // rewriting a file underneath a writer is a race that no amount of care in this
 // function would fix.
 //
+// A Compact that returns an error may still have taken effect. The rename
+// happens before the directory sync, so a failure reported by the sync is a
+// failure to make a swap durable rather than a failure to make it. The caller
+// cannot tell the two apart and must not assume the segment is unchanged — the
+// harness found this with one injected fsync failure, seeds/1889.md. Nothing
+// is lost either way: compaction only ever removes records a newer record for
+// the same key supersedes.
+//
 // The scope is one segment. A key whose newest record lives in a later segment
 // still keeps its older copy here, so this reclaims less than a whole-log
 // compaction would. That is deliberate for now: a cross-segment pass has to read

@@ -71,13 +71,14 @@ tasks:
   # -------------------------------------------------------------- simulation
 
   repro:
-    desc: 'Reconstruct a specific failure exactly. Usage: task repro SEED=8412 POINT=7'
+    desc: 'Reconstruct a specific failure exactly. Usage: task repro SEED=8 STEPS=3 FAULTS="bitflip@5:458021"'
     requires:
       vars: [SEED]
     vars:
-      POINT: '{{.POINT | default "0"}}'
+      STEPS: '{{.STEPS | default "0"}}'
+      FAULTS: '{{.FAULTS | default ""}}'
     cmds:
-      - go run ./cmd/spine repro --seed {{.SEED}} --point {{.POINT}}
+      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}"
 
   sim:corpus:
     desc: Replay every seed in the regression corpus
@@ -90,11 +91,24 @@ tasks:
       - go run ./cmd/spine sim crash-matrix
 
   sim:sweep:
-    desc: 'Random seed sweep with swarm-randomized fault configs. Usage: task sim:sweep COUNT=10000'
+    desc: 'Random seed sweep with swarm-randomized fault configs. Usage: task sim:sweep COUNT=10000 SEED=1'
     vars:
       COUNT: '{{.COUNT | default "10000"}}'
+      SEED: '{{.SEED | default "1"}}'
     cmds:
-      - go run ./cmd/spine sim sweep --count {{.COUNT}} --minimize --out seeds
+      - go run ./cmd/spine sim sweep --seed {{.SEED}} --count {{.COUNT}} --minimize --out seeds
+
+  sim:nightly:
+    desc: The sweep CI runs on a schedule, over seeds no committed run has used.
+    # A different range every night, because sweeping the same seeds daily is a
+    # slower way of running the corpus. The offset is passed in rather than
+    # drawn from the clock: a nightly run that cannot be repeated by hand is a
+    # failure report nobody can act on.
+    vars:
+      COUNT: '{{.COUNT | default "20000"}}'
+      SEED: '{{.SEED | default "100000"}}'
+    cmds:
+      - go run ./cmd/spine sim sweep --seed {{.SEED}} --count {{.COUNT}} --minimize --out seeds
 
   # ------------------------------------------------------------------- gates
 
