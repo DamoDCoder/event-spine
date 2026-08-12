@@ -31,6 +31,8 @@ func run(args []string) error {
 		return simulate(args[1:])
 	case "repro":
 		return repro(args[1:])
+	case "replay":
+		return replay(args[1:])
 	case "-h", "--help", "help":
 		usage()
 		return nil
@@ -56,8 +58,12 @@ subcommands:
   sim corpus [--dir seeds]
         Replay every crash point in the regression corpus.
 
-  repro --seed N [--point N]
+  repro --seed N [--steps N] [--faults "kind@position"]
         Reconstruct one failure exactly.
+
+  replay --seed N [--steps N] [--faults "..."] [--at STEP] [--ops] [--diff]
+        Step a seed, scrub to a step, or diff it against the same seed
+        with no faults.
 
   help  Print this message.
 `)

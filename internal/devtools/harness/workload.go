@@ -80,6 +80,12 @@ type witness struct {
 // process that has just been told its disk is broken — continuing would be
 // testing a caller nobody would write.
 func runWorkload(fs *FS, cfg Config) (*witness, error) {
+	return observeWorkload(fs, cfg, nil)
+}
+
+// observeWorkload is runWorkload with a hook the replay tools use to record
+// what the log looked like after every step.
+func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness, error) {
 	src := sim.NewSource(cfg.Seed)
 	clock := sim.NewClock()
 
@@ -122,6 +128,7 @@ func runWorkload(fs *FS, cfg Config) (*witness, error) {
 
 	for step := range steps {
 		w.steps = step + 1
+		fs.AtStep(step)
 		clock.Advance(core.Duration(1 + src.Intn(100)))
 
 		// A clock that jumps backwards is a fault the log has to
@@ -142,7 +149,7 @@ func runWorkload(fs *FS, cfg Config) (*witness, error) {
 			// the impossible value.
 			now := max(clock.Now()-core.Time(back), 0)
 			clock.Set(now)
-			fs.fired = append(fs.fired, f)
+			fs.record(f)
 		}
 
 		err := w.act(l, src, step)
@@ -153,6 +160,9 @@ func runWorkload(fs *FS, cfg Config) (*witness, error) {
 		// which is the part a checksum is responsible for.
 		w.corrupted = fs.hasFired(BitFlip)
 
+		if observe != nil && err == nil {
+			observe(l, step)
+		}
 		if err != nil {
 			return w, err
 		}

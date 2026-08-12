@@ -22,19 +22,23 @@ func Run(cfg Config) error {
 }
 
 // CleanOps returns how many filesystem operations the configuration's workload
-// performs with no faults injected.
+// performs with no faults injected, and the signature of that stream.
 //
-// A fault's position is an index into that stream, so the number is what says
+// A fault's position is an index into that stream, so the stream is what says
 // whether a stored seed still means what it meant. Change the log's I/O pattern
 // — add a directory sync, say — and every seed in the corpus silently moves to
 // a different point in the run. The seeds keep passing and stop testing what
 // they were recorded for, which is how a corpus rots without anyone noticing.
-func CleanOps(cfg Config) (int, error) {
+//
+// The count catches a stream that got longer. The signature also catches one
+// the same length in a different order, which is what swapping two syncs
+// produces and what a count would call unchanged.
+func CleanOps(cfg Config) (int, uint64, error) {
 	fs := NewFS(nil)
 	if _, err := runWorkload(fs, Config{Seed: cfg.Seed, Steps: cfg.Steps}); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return fs.Ops(), nil
+	return fs.Ops(), fs.Signature(), nil
 }
 
 // isInjected reports whether an error is the harness's own doing.

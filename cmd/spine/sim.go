@@ -153,16 +153,21 @@ func simCorpus(args []string) error {
 		// still a passing seed, so this warns rather than fails. It is
 		// reported at all because the alternative is a corpus that
 		// quietly stops testing what it was built to test.
-		if e.ops == 0 {
+		if e.ops == 0 && e.signature == 0 {
 			continue
 		}
-		ops, err := harness.CleanOps(e.cfg)
+		ops, signature, err := harness.CleanOps(e.cfg)
 		if err != nil {
 			return fmt.Errorf("corpus: %s: %w", e.file, err)
 		}
-		if ops != e.ops {
+		switch {
+		case e.ops != 0 && ops != e.ops:
 			drifted++
 			fmt.Printf("     drifted: the run is %d operations now, %d when the seed was recorded\n", ops, e.ops)
+		case e.signature != 0 && signature != e.signature:
+			drifted++
+			fmt.Printf("     drifted: the run is the same length and a different shape (%016x, recorded %016x)\n",
+				signature, e.signature)
 		}
 	}
 
@@ -228,10 +233,13 @@ type corpusEntry struct {
 	file string
 	cfg  harness.Config
 
-	// ops is how many filesystem operations the run performed when the seed
-	// was recorded. A fault's position is an index into that stream, so a
-	// different count means the seed no longer fires where it did.
-	ops int
+	// ops and signature describe the operation stream when the seed was
+	// recorded. A fault's position is an index into that stream, so a
+	// change in either means the seed no longer fires where it did. The
+	// signature is the stronger of the two: it catches a stream that was
+	// reordered without changing length.
+	ops       int
+	signature uint64
 }
 
 // writeCorpusEntry records a fresh failure as a seed file.
@@ -244,7 +252,7 @@ func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
 		return "", fmt.Errorf("corpus: %s already exists; a seed is never overwritten", path)
 	}
 
-	ops, err := harness.CleanOps(f.Config)
+	ops, signature, err := harness.CleanOps(f.Config)
 	if err != nil {
 		return "", fmt.Errorf("corpus: count operations for seed %d: %w", f.Config.Seed, err)
 	}
@@ -253,6 +261,7 @@ func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
 seed: %d
 steps: %d
 ops: %d
+signature: %016x
 faults: %s
 found: (fill in)
 milestone: M3
@@ -271,7 +280,7 @@ read yet.
 task repro SEED=%d FAULTS="%s"
 `+"```"+`
 `,
-		f.Config.Seed, f.Config.Steps, ops, harness.FormatFaults(f.Config.Faults), f.Err,
+		f.Config.Seed, f.Config.Steps, ops, signature, harness.FormatFaults(f.Config.Faults), f.Err,
 		f.Config.Seed, harness.FormatFaults(f.Config.Faults))
 
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
@@ -332,6 +341,13 @@ func parseCorpusEntry(file, body string) (corpusEntry, error) {
 				return entry, fmt.Errorf("corpus: %s: seed %q is not a number", file, value)
 			}
 			entry.cfg.Seed, haveSeed = n, true
+
+		case "signature":
+			n, err := strconv.ParseUint(value, 16, 64)
+			if err != nil {
+				return entry, fmt.Errorf("corpus: %s: signature %q is not hexadecimal", file, value)
+			}
+			entry.signature = n
 
 		case "ops":
 			n, err := strconv.Atoi(value)

@@ -47,6 +47,52 @@ type FS struct {
 	// were all scheduled past the end of the workload is a run with no
 	// faults, and the difference matters to a minimizer.
 	fired []Fault
+
+	// signature is a running hash of every operation the run performed: its
+	// index, its kind, and the file it touched.
+	//
+	// A fault's position is an ordinal in this stream, so the stream is what
+	// a stored seed's meaning depends on. Counting operations catches a
+	// stream that got longer; it does not catch one the same length in a
+	// different order, which is exactly what reordering two syncs would
+	// produce. The signature catches both.
+	signature uint64
+
+	// trace records what happened, for the devtools rather than the checks.
+	// It is only kept when someone asks, because a sweep of thousands of
+	// seeds has no use for it.
+	trace   []Op
+	tracing bool
+
+	// atStep is the workload step currently running, so an operation can be
+	// mapped back to the action that caused it. The workload sets it; the
+	// filesystem only reports it.
+	atStep int
+}
+
+// AtStep tells the filesystem which workload step is running.
+func (f *FS) AtStep(step int) { f.atStep = step }
+
+// Trace turns operation recording on. A sweep of thousands of seeds has no use
+// for the trace, so it is off unless a tool asks.
+func (f *FS) Tracing(on bool) { f.tracing = on }
+
+// Op is one filesystem operation, as the replay tools show it.
+type Op struct {
+	// Index is the operation's ordinal, which is what a fault's position
+	// names.
+	Index int
+
+	// Kind is the operation performed, and Name the file it touched.
+	Kind string
+	Name string
+
+	// Step is the workload step the operation belongs to, which is how a
+	// scrub maps an operation back to the action that caused it.
+	Step int
+
+	// Fault is the fault that fired here, if any.
+	Fault *Fault
 }
 
 // NewFS returns a filesystem with the disk faults from cfg scheduled against
@@ -92,14 +138,16 @@ func (f *FS) Simulated() *sim.FS { return f.fs }
 // which is what the machine sees when it boots again.
 func (f *FS) recovered() core.FS { return &FS{fs: f.fs, byOp: map[int][]Fault{}} }
 
-// step counts one operation and applies whatever is scheduled against it.
+// op counts one operation, records it, and applies whatever is scheduled
+// against it.
 //
 // It returns the error the operation should fail with, or nil to proceed.
-func (f *FS) step() error {
+func (f *FS) op(kind, name string) error {
 	if f.crashed {
 		return ErrCrashed
 	}
 	f.ops++
+	f.note(kind, name)
 
 	for _, fault := range f.byOp[f.ops] {
 		switch fault.Kind {
@@ -111,11 +159,11 @@ func (f *FS) step() error {
 			// along.
 			f.fs.Crash()
 			f.crashed = true
-			f.fired = append(f.fired, fault)
+			f.record(fault)
 			return ErrCrashed
 
 		case WriteError, SyncError:
-			f.fired = append(f.fired, fault)
+			f.record(fault)
 			return fmt.Errorf("%w at operation %d", errInjected, f.ops)
 
 		case BitFlip:
@@ -124,12 +172,59 @@ func (f *FS) step() error {
 			// something else. Errors are ignored because a flip
 			// that cannot be applied is a fault that did not fire.
 			if f.flip(fault.Arg) {
-				f.fired = append(f.fired, fault)
+				f.record(fault)
 			}
 		}
 	}
 	return nil
 }
+
+// note folds one operation into the signature, and records it when tracing.
+//
+// FNV-1a rather than a cryptographic hash: this identifies a stream, it does
+// not defend against one. The index is folded in along with the kind and the
+// name, so two operations swapping places changes the result.
+func (f *FS) note(kind, name string) {
+	const (
+		offset64 = 14695981039346656037
+		prime64  = 1099511628211
+	)
+	if f.signature == 0 {
+		f.signature = offset64
+	}
+
+	fold := func(b byte) {
+		f.signature ^= uint64(b)
+		f.signature *= prime64
+	}
+	fold(byte(f.ops))
+	fold(byte(f.ops >> 8))
+	for i := range len(kind) {
+		fold(kind[i])
+	}
+	for i := range len(name) {
+		fold(name[i])
+	}
+
+	if f.tracing {
+		f.trace = append(f.trace, Op{Index: f.ops, Kind: kind, Name: name, Step: f.atStep})
+	}
+}
+
+// record marks a fault as fired, and attaches it to the operation being traced
+// so a replay shows where it landed rather than only that it happened.
+func (f *FS) record(fault Fault) {
+	f.fired = append(f.fired, fault)
+	if f.tracing && len(f.trace) > 0 {
+		f.trace[len(f.trace)-1].Fault = &fault
+	}
+}
+
+// Signature returns the hash of the operation stream so far.
+func (f *FS) Signature() uint64 { return f.signature }
+
+// Trace returns the operations performed, when tracing was on.
+func (f *FS) Trace() []Op { return f.trace }
 
 // flip inverts one bit of the file most recently written to, and reports
 // whether it found something to corrupt.
@@ -189,7 +284,7 @@ func (f *FS) shortWrite(total int) (int, bool) {
 }
 
 func (f *FS) Create(name string) (core.File, error) {
-	if err := f.step(); err != nil {
+	if err := f.op("create", name); err != nil {
 		return nil, err
 	}
 	file, err := f.fs.Create(name)
@@ -200,7 +295,7 @@ func (f *FS) Create(name string) (core.File, error) {
 }
 
 func (f *FS) Open(name string) (core.File, error) {
-	if err := f.step(); err != nil {
+	if err := f.op("open", name); err != nil {
 		return nil, err
 	}
 	file, err := f.fs.Open(name)
@@ -211,14 +306,14 @@ func (f *FS) Open(name string) (core.File, error) {
 }
 
 func (f *FS) Remove(name string) error {
-	if err := f.step(); err != nil {
+	if err := f.op("remove", name); err != nil {
 		return err
 	}
 	return f.fs.Remove(name)
 }
 
 func (f *FS) Rename(oldName, newName string) error {
-	if err := f.step(); err != nil {
+	if err := f.op("rename", oldName); err != nil {
 		return err
 	}
 	return f.fs.Rename(oldName, newName)
@@ -234,7 +329,7 @@ func (f *FS) List() ([]string, error) {
 }
 
 func (f *FS) Sync() error {
-	if err := f.step(); err != nil {
+	if err := f.op("syncdir", "."); err != nil {
 		return err
 	}
 	return f.fs.Sync()
@@ -250,7 +345,7 @@ type faultyFile struct {
 
 func (f *faultyFile) Append(p []byte) (int, error) {
 	f.fs.lastWritten = f.name
-	if err := f.fs.step(); err != nil {
+	if err := f.fs.op("append", f.name); err != nil {
 		return 0, err
 	}
 	if n, ok := f.fs.shortWrite(len(p)); ok {
@@ -264,14 +359,14 @@ func (f *faultyFile) Append(p []byte) (int, error) {
 }
 
 func (f *faultyFile) Sync() error {
-	if err := f.fs.step(); err != nil {
+	if err := f.fs.op("sync", f.name); err != nil {
 		return err
 	}
 	return f.File.Sync()
 }
 
 func (f *faultyFile) Truncate(size int64) error {
-	if err := f.fs.step(); err != nil {
+	if err := f.fs.op("truncate", f.name); err != nil {
 		return err
 	}
 	return f.File.Truncate(size)
