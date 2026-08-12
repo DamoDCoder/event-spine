@@ -84,6 +84,15 @@ var (
 	ErrCorrupt = errors.New("log: record is corrupt")
 )
 
+// readLength returns the total-length field from a record header.
+//
+// A segment reads the header before the body, so it needs the length before it
+// has enough bytes to Decode. The field is still untrusted: every caller
+// bounds-checks it before using it to size a read.
+func readLength(header []byte) uint32 {
+	return binary.LittleEndian.Uint32(header[lengthField : lengthField+4])
+}
+
 // RecordLen returns the encoded size of an event, header included.
 func RecordLen(e core.Event) int {
 	return HeaderLen + len(e.Key) + len(e.Payload)
