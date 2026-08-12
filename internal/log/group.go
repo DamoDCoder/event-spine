@@ -95,6 +95,16 @@ func (g *Group) Name() string { return g.name }
 // The commit is synced whatever the log's durability mode says. A commit that
 // is not on disk is a promise to redeliver that the next crash breaks in the
 // wrong direction: the consumer would resume past records it never processed.
+//
+// A commit that returns an error may still take effect. The record is written
+// before it is synced, so a failed sync leaves it on a disk that a restart
+// short of a power cut can still read — the harness found this with a single
+// injected fsync failure, seeds/0072.md. The log cannot promise otherwise
+// without a second write to confirm the first, which would double the cost of
+// every commit to narrow a window that at-least-once delivery already covers.
+// What it does promise is that a group never resumes at an offset nobody asked
+// it to: a failed commit can only advance the group to a position the consumer
+// itself named, and therefore to one it had already processed.
 func (g *Group) Commit(off Offset) error {
 	l := g.log
 	if off < l.First() || off > l.Next() {

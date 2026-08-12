@@ -50,9 +50,17 @@ offset  size  field
 
 Design notes worth defending later:
 
-- **CRC covers the payload and the trailing header fields, not the length.** The
-  length has to be trusted before the CRC can be checked, so a corrupt length is
-  detected by the record failing to parse at the expected boundary, not by CRC.
+- **CRC covers the offset, the payload, and the trailing header fields — not the
+  length.** The length has to be trusted before the CRC can be located, so a
+  corrupt length is detected by the record failing to parse at the expected
+  boundary, not by CRC.
+
+  The offset was outside that coverage until M3, on the reasoning that a reader
+  always knows which offset comes next and can compare. Compaction ended it:
+  once records can be missing, a scan can only require offsets to ascend, and a
+  flipped bit that moves an offset further along passes the comparison. The
+  harness found this with one flipped bit — `seeds/0008.md` — after it had put
+  the log's tail at 4611686018427387911.
 - **The timestamp is logical, taken from the injected clock.** A wall-clock
   timestamp in a record makes replay non-deterministic, which would defeat the
   central claim of the entire project.

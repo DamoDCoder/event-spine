@@ -35,15 +35,13 @@ const (
 	// HeaderLen is the fixed prefix before the key.
 	HeaderLen = 28
 
-	// crcStart is where CRC coverage begins.
+	// crcStart is where the contiguous half of the CRC's coverage begins.
+	// The offset field is covered too, out of line — see checksum.
 	//
-	// The offset and the length are deliberately outside it. The length has
+	// The length is deliberately outside it and stays there. The length has
 	// to be trusted before the CRC can be located at all, so a corrupt
 	// length is caught by the record failing to parse at its boundary, not
-	// by the checksum. The offset is redundant with the reader's position
-	// in the sequence, so a corrupt offset is caught by comparing against
-	// the offset the reader expected — which is why DecodeAt exists and why
-	// callers should prefer it.
+	// by the checksum.
 	crcStart = 16
 
 	offsetField = 0
@@ -118,9 +116,27 @@ func Append(dst []byte, off Offset, e core.Event) ([]byte, error) {
 	dst = binary.LittleEndian.AppendUint32(dst, 0) // checksum, filled in below
 	dst = e.AppendCanonical(dst)
 
-	sum := crc32.Checksum(dst[start+crcStart:], castagnoli)
+	sum := checksum(dst[start:])
 	binary.LittleEndian.PutUint32(dst[start+crcField:start+crcField+4], sum)
 	return dst, nil
+}
+
+// checksum computes a record's CRC32C over the offset field and everything from
+// crcStart onwards, skipping the length and the checksum itself.
+//
+// The offset used to be outside this, on the reasoning that a reader always
+// knows which offset comes next and DecodeAt compares against it. Compaction
+// ended that: once records can be missing, a scan can only require offsets to
+// ascend, and a flipped bit that moves an offset further along passes the
+// comparison. seeds/0008.md is that bug — one flipped bit put the log's tail at
+// 4611686018427387911 and every later append was assigned an offset from there.
+//
+// Two ranges rather than one is the price of keeping the length outside, which
+// is still right: the length is what locates the checksum, so it cannot be
+// protected by it.
+func checksum(record []byte) uint32 {
+	sum := crc32.Update(0, castagnoli, record[offsetField:offsetField+8])
+	return crc32.Update(sum, castagnoli, record[crcStart:])
 }
 
 // Record is one decoded record.
@@ -159,7 +175,7 @@ func Decode(b []byte) (Record, error) {
 	}
 
 	want := binary.LittleEndian.Uint32(b[crcField : crcField+4])
-	if got := crc32.Checksum(b[crcStart:total], castagnoli); got != want {
+	if got := checksum(b[:total]); got != want {
 		return Record{}, fmt.Errorf("%w: checksum is %08x, want %08x", ErrCorrupt, got, want)
 	}
 

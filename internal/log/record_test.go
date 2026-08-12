@@ -115,53 +115,53 @@ func TestEverySingleBitFlipIsDetected(t *testing.T) {
 		t.Fatalf("Append: %v", err)
 	}
 
-	var undetectedByCRC, caughtByOffset int
+	// Every bit of every byte, with no exceptions. The offset field used to
+	// be one: it sat outside CRC coverage because a reader always knew
+	// which offset came next and DecodeAt compared against it. Compaction
+	// ended that — a scan across gaps can only require offsets to ascend —
+	// and seeds/0008.md is the flipped bit that walked through the gap it
+	// left.
 	for bytePos := range clean {
 		for bit := range 8 {
 			corrupt := append([]byte(nil), clean...)
 			corrupt[bytePos] ^= 1 << bit
 
 			_, err := Decode(corrupt)
-			offsetErr := func() error {
-				_, e := DecodeAt(corrupt, off)
-				return e
-			}()
+			if err == nil {
+				t.Fatalf("byte %d bit %d: a flipped record decoded cleanly", bytePos, bit)
+			}
+			if !errors.Is(err, ErrCorrupt) && !errors.Is(err, ErrTorn) {
+				t.Fatalf("byte %d bit %d: unexpected error %v", bytePos, bit, err)
+			}
 
-			switch {
-			case bytePos < lengthField:
-				// The offset field is outside CRC coverage by
-				// design. Decode cannot see the flip; DecodeAt
-				// must.
-				if err != nil {
-					t.Fatalf("byte %d bit %d: Decode rejected a flip in the offset field it cannot check: %v", bytePos, bit, err)
-				}
-				if !errors.Is(offsetErr, ErrCorrupt) {
-					t.Fatalf("byte %d bit %d: a flipped offset was not caught by DecodeAt: %v", bytePos, bit, offsetErr)
-				}
-				undetectedByCRC++
-				caughtByOffset++
-
-			default:
-				// Everything from the length field onward is
-				// caught: the length by its bounds or by the
-				// record failing to parse at its boundary, the
-				// rest by the checksum.
-				if err == nil {
-					t.Fatalf("byte %d bit %d: a flipped record decoded cleanly", bytePos, bit)
-				}
-				if !errors.Is(err, ErrCorrupt) && !errors.Is(err, ErrTorn) {
-					t.Fatalf("byte %d bit %d: unexpected error %v", bytePos, bit, err)
-				}
+			// DecodeAt is strictly stronger, never weaker.
+			if _, err := DecodeAt(corrupt, off); err == nil {
+				t.Fatalf("byte %d bit %d: DecodeAt accepted what Decode rejected", bytePos, bit)
 			}
 		}
 	}
+}
 
-	// The offset field is 8 bytes, and every one of its 64 bits is invisible
-	// to the checksum. Pinned as a number so that widening CRC coverage
-	// later shows up here as a failing count rather than as nothing.
-	if undetectedByCRC != 64 || caughtByOffset != 64 {
-		t.Fatalf("offset field: %d flips invisible to the CRC, %d caught by the expected offset; want 64 and 64",
-			undetectedByCRC, caughtByOffset)
+// The length field stays outside the checksum, because the length is what
+// locates the checksum. It is caught by the record failing to parse at its own
+// boundary instead, and that is a different mechanism worth its own test.
+func TestAFlippedLengthIsCaughtByFramingRatherThanTheChecksum(t *testing.T) {
+	e := core.Event{Key: "acct-0001", Time: 1234, Schema: 3, Payload: []byte("payload")}
+
+	clean, err := Append(nil, 77, e)
+	if err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	for bytePos := lengthField; bytePos < lengthField+4; bytePos++ {
+		for bit := range 8 {
+			corrupt := append([]byte(nil), clean...)
+			corrupt[bytePos] ^= 1 << bit
+
+			if _, err := Decode(corrupt); err == nil {
+				t.Fatalf("byte %d bit %d: a flipped length decoded cleanly", bytePos, bit)
+			}
+		}
 	}
 }
 
