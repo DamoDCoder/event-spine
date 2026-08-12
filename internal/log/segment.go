@@ -171,6 +171,36 @@ type Recovery struct {
 // precisely so that there is nothing to survive. A full scan on open is the
 // price, and `task bench:log` is what decides whether it is too high.
 func OpenSegment(fs core.FS, name string, opts Options) (*Segment, Recovery, error) {
+	return openSegment(fs, name, opts, true)
+}
+
+// OpenSealedSegment opens a segment that is not the active one, and refuses to
+// change it.
+//
+// A sealed segment has no legitimate torn tail: nothing has appended to it
+// since it was sealed and synced. So a tail found here is a fault rather than a
+// crash artefact, and truncating it would be deleting records that were
+// acknowledged as durable. It is reported as an error and the file is left
+// exactly as it was found, for a human to look at.
+func OpenSealedSegment(fs core.FS, name string, opts Options) (*Segment, error) {
+	s, rec, err := openSegment(fs, name, opts, false)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case rec.Corrupt != nil:
+		s.Close()
+		return nil, fmt.Errorf("log: sealed segment %s is damaged: %w", name, rec.Corrupt)
+	case rec.Torn:
+		s.Close()
+		return nil, fmt.Errorf("log: sealed segment %s ends mid-record with %d bytes after offset %d: %w",
+			name, rec.Discarded, rec.Next, ErrTorn)
+	}
+	s.Seal()
+	return s, nil
+}
+
+func openSegment(fs core.FS, name string, opts Options, truncate bool) (*Segment, Recovery, error) {
 	opts = opts.withDefaults()
 
 	base, ok := ParseSegmentName(name)
@@ -197,7 +227,7 @@ func OpenSegment(fs core.FS, name string, opts Options) (*Segment, Recovery, err
 		f.Close()
 		return nil, Recovery{}, err
 	}
-	if rec.Discarded > 0 {
+	if rec.Discarded > 0 && truncate {
 		if err := f.Truncate(rec.Valid); err != nil {
 			f.Close()
 			return nil, Recovery{}, fmt.Errorf("log: truncate %s to %d: %w", name, rec.Valid, err)
