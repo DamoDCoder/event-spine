@@ -138,149 +138,6 @@ func CreateSegment(fs core.FS, base Offset, opts Options) (*Segment, error) {
 	}, nil
 }
 
-// Recovery describes what opening a segment found.
-//
-// Discarded is the number of bytes truncated from the tail. The simulation
-// asserts it never exceeds the write that was in flight, because truncating
-// more than that is silent data loss wearing recovery's clothes.
-type Recovery struct {
-	// Records is how many valid records were found.
-	Records int64
-
-	// Valid is the byte length the segment was truncated to.
-	Valid int64
-
-	// Discarded is how many bytes were removed from the tail.
-	Discarded int64
-
-	// Next is the offset the segment will assign next.
-	Next Offset
-
-	// Torn is set when the tail ended mid-record, which is the normal
-	// outcome of a crash during an append.
-	Torn bool
-
-	// Corrupt is set when the tail was present but wrong: a failed
-	// checksum, or framing that does not parse. Unlike Torn this is not
-	// normal, and the caller decides whether to continue. Recovery reports
-	// it rather than deciding, because "truncate and carry on" and "stop,
-	// something is wrong with this disk" are both defensible and only the
-	// caller knows which.
-	Corrupt error
-}
-
-// OpenSegment opens an existing segment, scans it, and truncates any torn or
-// corrupt tail.
-//
-// The scan is a full pass over the file. docs/log-design.md describes scanning
-// forward from the last index entry instead, which is only possible when the
-// index survived the crash — and this implementation keeps no index file
-// precisely so that there is nothing to survive. A full scan on open is the
-// price, and `task bench:log` is what decides whether it is too high.
-func OpenSegment(fs core.FS, name string, opts Options) (*Segment, Recovery, error) {
-	return openSegment(fs, name, opts, true)
-}
-
-// OpenSealedSegment opens a segment that is not the active one, and refuses to
-// change it.
-//
-// A sealed segment has no legitimate torn tail: nothing has appended to it
-// since it was sealed and synced. So a tail found here is a fault rather than a
-// crash artefact, and truncating it would be deleting records that were
-// acknowledged as durable. It is reported as an error and the file is left
-// exactly as it was found, for a human to look at.
-func OpenSealedSegment(fs core.FS, name string, opts Options) (*Segment, error) {
-	s, rec, err := openSegment(fs, name, opts, false)
-	if err != nil {
-		return nil, err
-	}
-	switch {
-	case rec.Corrupt != nil:
-		s.Close()
-		return nil, fmt.Errorf("log: sealed segment %s is damaged: %w", name, rec.Corrupt)
-	case rec.Torn:
-		s.Close()
-		return nil, fmt.Errorf("log: sealed segment %s ends mid-record with %d bytes after offset %d: %w",
-			name, rec.Discarded, rec.Next, ErrTorn)
-	}
-	s.Seal()
-	return s, nil
-}
-
-func openSegment(fs core.FS, name string, opts Options, truncate bool) (*Segment, Recovery, error) {
-	opts = opts.withDefaults()
-
-	base, ok := ParseSegmentName(name)
-	if !ok {
-		return nil, Recovery{}, fmt.Errorf("log: %q is not a segment file name", name)
-	}
-	f, err := fs.Open(name)
-	if err != nil {
-		return nil, Recovery{}, fmt.Errorf("log: open segment %s: %w", name, err)
-	}
-
-	s := &Segment{
-		file:     f,
-		name:     name,
-		opts:     opts,
-		base:     base,
-		next:     base,
-		index:    []indexEntry{{offset: base, pos: 0}},
-		maxBytes: opts.MaxBytes,
-	}
-
-	rec, err := s.scan()
-	if err != nil {
-		f.Close()
-		return nil, Recovery{}, err
-	}
-	if rec.Discarded > 0 && truncate {
-		if err := f.Truncate(rec.Valid); err != nil {
-			f.Close()
-			return nil, Recovery{}, fmt.Errorf("log: truncate %s to %d: %w", name, rec.Valid, err)
-		}
-	}
-	s.size = rec.Valid
-	s.next = rec.Next
-	return s, rec, nil
-}
-
-// scan reads the segment from the start, validating every record.
-func (s *Segment) scan() (Recovery, error) {
-	size, err := s.file.Size()
-	if err != nil {
-		return Recovery{}, fmt.Errorf("log: size %s: %w", s.name, err)
-	}
-
-	rec := Recovery{Next: s.base}
-	var pos int64
-
-	for pos < size {
-		r, err := s.readRecordAt(pos, rec.Next)
-		switch {
-		case err == nil:
-		case errors.Is(err, ErrTorn):
-			rec.Torn = true
-			rec.Valid, rec.Discarded = pos, size-pos
-			return rec, nil
-		case errors.Is(err, ErrCorrupt):
-			rec.Corrupt = fmt.Errorf("log: %s at byte %d: %w", s.name, pos, err)
-			rec.Valid, rec.Discarded = pos, size-pos
-			return rec, nil
-		default:
-			return Recovery{}, err
-		}
-
-		s.noteIndex(rec.Next, pos)
-		pos += int64(r.Len)
-		rec.Next++
-		rec.Records++
-	}
-
-	rec.Valid = size
-	return rec, nil
-}
-
 // readRecordAt reads and validates the record beginning at pos.
 //
 // It reads the header first and the body second, rather than guessing at a read
@@ -422,13 +279,26 @@ func (s *Segment) AppendAll(events []core.Event) (int, Offset, error) {
 }
 
 // Read returns the record at off.
+func (s *Segment) Read(off Offset) (Record, error) {
+	pos, err := s.locate(off)
+	if err != nil {
+		return Record{}, err
+	}
+	return s.readRecordAt(pos, off)
+}
+
+// locate returns the byte position of the record at off.
 //
 // It binary searches the sparse index for the greatest indexed offset at or
 // below off, then scans forward. The scan is bounded by the index interval, so
 // its cost is set by configuration rather than by how large the segment is.
-func (s *Segment) Read(off Offset) (Record, error) {
+//
+// A sequential reader calls this once and then advances by each record's own
+// length, which is why it is separate from Read: paying the search per record
+// is what makes a scan cost more than the bytes it reads.
+func (s *Segment) locate(off Offset) (int64, error) {
 	if off < s.base || off >= s.next {
-		return Record{}, fmt.Errorf("%w: %d is outside segment %s, which holds [%d, %d)",
+		return 0, fmt.Errorf("%w: %d is outside segment %s, which holds [%d, %d)",
 			ErrNotFound, off, s.name, s.base, s.next)
 	}
 
@@ -437,12 +307,12 @@ func (s *Segment) Read(off Offset) (Record, error) {
 
 	pos, at := entry.pos, entry.offset
 	for pos < s.size {
+		if at == off {
+			return pos, nil
+		}
 		r, err := s.readRecordAt(pos, at)
 		if err != nil {
-			return Record{}, err
-		}
-		if at == off {
-			return r, nil
+			return 0, err
 		}
 		pos += int64(r.Len)
 		at++
@@ -450,7 +320,7 @@ func (s *Segment) Read(off Offset) (Record, error) {
 	// Unreachable while the index and the file agree. It is a returned
 	// error rather than a panic because "the index disagrees with the file"
 	// is a bug worth a message that names the offset.
-	return Record{}, fmt.Errorf("%w: %d is within segment %s but was not found on disk", ErrNotFound, off, s.name)
+	return 0, fmt.Errorf("%w: %d is within segment %s but was not found on disk", ErrNotFound, off, s.name)
 }
 
 // Sync makes everything appended so far durable.

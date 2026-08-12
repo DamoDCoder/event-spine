@@ -1,6 +1,7 @@
 package log
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -172,6 +173,49 @@ func BenchmarkLogRead(b *testing.B) {
 					b.Fatalf("Read %d: %v", off, err)
 				}
 				off = (off + stride) % records
+			}
+
+			b.StopTimer()
+			closeLog(b, l)
+		})
+	}
+}
+
+// BenchmarkLogScan is the same records read through a cursor rather than by
+// offset. The difference between this and BenchmarkLogRead is the sparse index
+// search a random read repeats for every record, which a consumer streaming the
+// log has no reason to pay.
+func BenchmarkLogScan(b *testing.B) {
+	const records = 200_000
+
+	for _, size := range benchSizes {
+		b.Run(fmt.Sprintf("%dB", size), func(b *testing.B) {
+			l := benchLog(b, Config{Durability: OS})
+			fillBench(b, l, records, size)
+
+			r, err := l.Reader(0)
+			if err != nil {
+				b.Fatalf("Reader: %v", err)
+			}
+			b.SetBytes(int64(RecordLen(benchEvent(size))))
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for b.Loop() {
+				rec, err := r.Next()
+				if errors.Is(err, ErrEndOfLog) {
+					// Restarting mid-run costs one index search
+					// per 200,000 records, which is below the
+					// noise this measures.
+					if err := r.Seek(0); err != nil {
+						b.Fatalf("Seek: %v", err)
+					}
+					continue
+				}
+				if err != nil {
+					b.Fatalf("Next: %v", err)
+				}
+				_ = rec
 			}
 
 			b.StopTimer()
