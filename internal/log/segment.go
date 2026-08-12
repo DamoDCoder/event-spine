@@ -108,8 +108,15 @@ type Segment struct {
 	index    []indexEntry
 	indexed  int64 // file position of the most recent index entry
 	sealed   bool
-	scratch  []byte
 	maxBytes int64
+
+	// Buffers reused across appends. scratch stages the records of one
+	// call, marks holds the file position each of them will occupy, and one
+	// exists so a single-event append can reach the batch path without
+	// allocating a slice to do it.
+	scratch []byte
+	marks   []int64
+	one     [1]core.Event
 }
 
 // CreateSegment makes a new empty segment beginning at base.
@@ -327,31 +334,91 @@ func (s *Segment) noteIndex(off Offset, pos int64) {
 // Append does not sync. Durability is the caller's choice, because the three
 // modes in docs/log-design.md differ only in when the caller asks for it.
 func (s *Segment) Append(e core.Event) (Offset, error) {
-	if s.sealed {
-		return 0, fmt.Errorf("log: append to %s: %w", s.name, ErrSealed)
-	}
-
-	off := s.next
-	s.scratch = s.scratch[:0]
-	buf, err := Append(s.scratch, off, e)
+	// The one-element slice is a field rather than a local, so taking a
+	// slice of it does not escape to the heap on every append. bench/log.txt
+	// is why that is worth a line of explanation: at 1.4 microseconds an
+	// append, one allocation is a measurable share of the operation.
+	s.one[0] = e
+	n, off, err := s.AppendAll(s.one[:])
 	if err != nil {
 		return 0, err
 	}
-	s.scratch = buf
+	if n != 1 {
+		return 0, fmt.Errorf("log: append to %s wrote %d records, want 1", s.name, n)
+	}
+	return off, nil
+}
 
-	if _, err := s.file.Append(buf); err != nil {
+// AppendAll writes as many of the events as the segment has room for, in one
+// write, and returns how many it took along with the offset of the first.
+//
+// One write is the point. The first benchmark run found every record costing
+// its own write(2), which is where the append path's time went — batching the
+// fsync amortised durability but left the syscall count untouched. The caller
+// is expected to hand the remainder to the next segment.
+//
+// A short return is normal and means the segment filled. An error after a
+// non-zero count means the events up to that count were written and the one
+// after it was rejected.
+func (s *Segment) AppendAll(events []core.Event) (int, Offset, error) {
+	if s.sealed {
+		return 0, 0, fmt.Errorf("log: append to %s: %w", s.name, ErrSealed)
+	}
+	if len(events) == 0 {
+		return 0, s.next, nil
+	}
+
+	first := s.next
+	s.scratch = s.scratch[:0]
+	s.marks = s.marks[:0]
+
+	var encodeErr error
+	for i, e := range events {
+		// The position this record will occupy, which is the segment's
+		// current size plus everything already staged in the buffer.
+		pos := s.size + int64(len(s.scratch))
+
+		buf, err := Append(s.scratch, first+Offset(i), e)
+		if err != nil {
+			// Append validates before it encodes, so the buffer still
+			// holds exactly the records staged before this one. The
+			// valid prefix is written and the error is returned after
+			// it, because the alternative is discarding records the
+			// caller was told nothing about.
+			encodeErr = err
+			break
+		}
+		s.scratch = buf
+		s.marks = append(s.marks, pos)
+
+		if s.size+int64(len(s.scratch)) >= s.maxBytes {
+			break
+		}
+	}
+
+	n := len(s.marks)
+	if n == 0 {
+		return 0, first, encodeErr
+	}
+
+	if _, err := s.file.Append(s.scratch); err != nil {
 		// The file may now hold a partial record. That is exactly the
 		// torn tail recovery exists to truncate, so the segment refuses
 		// further appends rather than writing a valid record after a
 		// partial one, which would make the tear unfindable.
+		//
+		// Nothing is acknowledged: the caller is told zero records
+		// landed, and recovery will discard whatever reached the disk.
 		s.sealed = true
-		return 0, fmt.Errorf("log: append to %s: %w", s.name, err)
+		return 0, first, fmt.Errorf("log: append to %s: %w", s.name, err)
 	}
 
-	s.noteIndex(off, s.size)
-	s.size += int64(len(buf))
-	s.next++
-	return off, nil
+	for i, pos := range s.marks {
+		s.noteIndex(first+Offset(i), pos)
+	}
+	s.size += int64(len(s.scratch))
+	s.next += Offset(n)
+	return n, first, encodeErr
 }
 
 // Read returns the record at off.

@@ -177,18 +177,32 @@ func (l *Log) Append(events ...core.Event) ([]Offset, error) {
 	}
 
 	offsets := make([]Offset, 0, len(events))
-	for _, e := range events {
+	for rest := events; len(rest) > 0; {
 		if l.active.Full() {
 			if err := l.roll(); err != nil {
 				return offsets, err
 			}
 		}
-		off, err := l.active.Append(e)
+
+		// One write per segment touched, rather than one per record. A
+		// batch that crosses a roll therefore costs two writes, which
+		// is the floor: the second segment is a different file.
+		n, first, err := l.active.AppendAll(rest)
+		for i := range n {
+			offsets = append(offsets, first+Offset(i))
+		}
+		l.sinceSync += n
 		if err != nil {
 			return offsets, err
 		}
-		offsets = append(offsets, off)
-		l.sinceSync++
+		if n == 0 {
+			// Unreachable: the segment was not full on entry, so it
+			// had room for at least one record. Returned rather than
+			// looped on, because a silent infinite loop is the worse
+			// way to find out this reasoning was wrong.
+			return offsets, fmt.Errorf("log: segment %s accepted no records and reported no error", l.active.Name())
+		}
+		rest = rest[n:]
 	}
 
 	if err := l.maybeSync(); err != nil {

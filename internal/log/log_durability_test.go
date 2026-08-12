@@ -13,6 +13,10 @@ import (
 type countingFS struct {
 	core.FS
 	syncs int
+
+	// writes counts calls to File.Append, which is one write(2) each. It is
+	// the number the batching in Log.Append exists to reduce.
+	writes int
 }
 
 func (c *countingFS) Create(name string) (core.File, error) {
@@ -39,6 +43,11 @@ type countingFile struct {
 func (f *countingFile) Sync() error {
 	f.fs.syncs++
 	return f.File.Sync()
+}
+
+func (f *countingFile) Append(p []byte) (int, error) {
+	f.fs.writes++
+	return f.File.Append(p)
 }
 
 // A segment large enough that nothing here rolls, since a roll syncs on its own
