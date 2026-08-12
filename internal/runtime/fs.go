@@ -21,11 +21,13 @@ import (
 
 // FS is a real directory on a real disk.
 //
-// One caveat worth stating where someone will read it: on darwin, Sync issues
-// fsync, which flushes to the drive but does not guarantee the drive flushed
-// its own write cache — that needs F_FULLFSYNC. The authoritative test run is
-// the Linux container for exactly this kind of reason, and a durability number
-// measured on a Mac is a number about macOS, not about durability.
+// One caveat worth stating where someone will read it: Sync means something
+// different on each platform. On darwin, os.File.Sync issues F_FULLFSYNC, which
+// does flush the drive's own write cache, so a sync there is stricter — and
+// several milliseconds slower — than the fsync a Linux run performs. That
+// difference is visible in bench/log.txt and is a property of the platform, not
+// of this code. The authoritative test run is the Linux container for exactly
+// this kind of reason.
 type FS struct {
 	dir string
 }

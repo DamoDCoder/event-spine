@@ -25,6 +25,12 @@ grouped under `Unreleased`.
 - The filesystem interface, a real adapter in `internal/runtime`, a crashable
   simulated one in `internal/sim`, and the tests that compare them:
   `docs/decisions/m2-filesystem-model.md`.
+- `internal/log`: record framing with CRC32C, segments with a sparse in-memory
+  index and torn-tail recovery, and the segmented log with three durability
+  modes.
+- `internal/devtools/bench` and `task bench:log`: append throughput, latency
+  percentiles, recovery time, and cold-segment read cost, with the run committed
+  to `bench/log.txt`.
 
 ### Decision Notes
 
@@ -67,6 +73,37 @@ M2, in progress:
   machine, so nothing here has yet observed unsynced data being lost. No
   durability claim is publishable until a fault-injecting block device says
   otherwise, and the note records that rather than quietly assuming it.
+
+M2 throughput, measured on 2026-08-12, darwin/arm64, Apple M2 Max, single
+producer, 64 byte records, `task bench:log`, full run in `bench/log.txt`:
+
+- **The 1M appends/sec claim does not hold.** The fastest mode measured is `os`,
+  which never syncs, at 1,436 ns/op — about 696,000 appends/sec, 30% short. The
+  default `batch` mode reaches about 151,000/sec, and `sync` about 233/sec.
+  The claim stands as written in the roadmap and unmet, rather than being
+  restated against the mode that came closest.
+- The p99 half holds where the mode allows it: 3.8 µs in `os` and 6.9 µs in
+  `batch`, both far inside the 2 ms budget. `sync` misses it at 8.1 ms, because
+  Go's `os.File.Sync` on darwin issues `F_FULLFSYNC` and waits for the drive's
+  own cache. That is a platform property, and the Linux number will differ; the
+  comment in `internal/runtime/fs.go` claimed the opposite and has been
+  corrected.
+- Where the time goes is now measured rather than guessed: every record costs its
+  own `write(2)`. Handing 256 events to one `Append` call amortises the fsync —
+  `sync` mode improves 175-fold, from 4.29 ms to 24 µs per record — and leaves
+  per-record throughput in `os` mode unchanged at 1.43 µs, because the syscall
+  count did not change. Buffering encoded records and writing once per call is
+  therefore the next optimisation, and it has a number to beat.
+- Recovery scans about 1.16M records/sec: a 100,000 record segment reopens in
+  86 ms, at three allocations per record. Only the active segment is scanned, so
+  this is a function of segment size and not of log size.
+- The cost the in-memory index defers is 56 ms to open a cold 4 MiB sealed
+  segment. That is the number that decides whether an index file belongs on disk
+  after all, and it is not yet paid by anything that matters, because reads
+  arrive in offset order and the active segment is already warm.
+- Benchmarks run on the host, not in the container. The container is
+  authoritative for correctness; for disk numbers on macOS it measures a VM's
+  virtualised filesystem, which is neither this machine nor a Linux server.
 
 Carried over from the ideas cradle, where this project was designed:
 
