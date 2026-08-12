@@ -366,4 +366,5 @@ device behind it, or it is a claim about a belief.
 | The determinism gate and its result | [m1-deterministic-core.md](decisions/m1-deterministic-core.md) |
 | What the filesystem model proves and does not | [m2-filesystem-model.md](decisions/m2-filesystem-model.md) |
 | The log's measured throughput, and the crash matrix's findings | [m2-owned-log.md](decisions/m2-owned-log.md) |
+| The fault catalogue, what the sweep found, and how the corpus rots | [m3-simulation-harness.md](decisions/m3-simulation-harness.md) |
 | Record layout, segments, recovery, durability modes | [log-design.md](log-design.md) |

@@ -140,7 +140,7 @@ func simCorpus(args []string) error {
 		return nil
 	}
 
-	var failed int
+	var failed, drifted int
 	for _, e := range entries {
 		if err := harness.Run(e.cfg); err != nil {
 			failed++
@@ -148,9 +148,25 @@ func simCorpus(args []string) error {
 			continue
 		}
 		fmt.Printf("ok   %s (seed %d %s)\n", e.file, e.cfg.Seed, harness.FormatFaults(e.cfg.Faults))
+
+		// A passing seed that no longer fires where it was recorded is
+		// still a passing seed, so this warns rather than fails. It is
+		// reported at all because the alternative is a corpus that
+		// quietly stops testing what it was built to test.
+		if e.ops == 0 {
+			continue
+		}
+		ops, err := harness.CleanOps(e.cfg)
+		if err != nil {
+			return fmt.Errorf("corpus: %s: %w", e.file, err)
+		}
+		if ops != e.ops {
+			drifted++
+			fmt.Printf("     drifted: the run is %d operations now, %d when the seed was recorded\n", ops, e.ops)
+		}
 	}
 
-	fmt.Printf("\ncorpus: %d seeds, %d failures\n", len(entries), failed)
+	fmt.Printf("\ncorpus: %d seeds, %d failures, %d drifted\n", len(entries), failed, drifted)
 	if failed > 0 {
 		return fmt.Errorf("corpus: %d seeds still reproduce", failed)
 	}
@@ -211,6 +227,11 @@ func repro(args []string) error {
 type corpusEntry struct {
 	file string
 	cfg  harness.Config
+
+	// ops is how many filesystem operations the run performed when the seed
+	// was recorded. A fault's position is an index into that stream, so a
+	// different count means the seed no longer fires where it did.
+	ops int
 }
 
 // writeCorpusEntry records a fresh failure as a seed file.
@@ -223,9 +244,15 @@ func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
 		return "", fmt.Errorf("corpus: %s already exists; a seed is never overwritten", path)
 	}
 
+	ops, err := harness.CleanOps(f.Config)
+	if err != nil {
+		return "", fmt.Errorf("corpus: count operations for seed %d: %w", f.Config.Seed, err)
+	}
+
 	body := fmt.Sprintf(`---
 seed: %d
 steps: %d
+ops: %d
 faults: %s
 found: (fill in)
 milestone: M3
@@ -244,7 +271,7 @@ read yet.
 task repro SEED=%d FAULTS="%s"
 `+"```"+`
 `,
-		f.Config.Seed, f.Config.Steps, harness.FormatFaults(f.Config.Faults), f.Err,
+		f.Config.Seed, f.Config.Steps, ops, harness.FormatFaults(f.Config.Faults), f.Err,
 		f.Config.Seed, harness.FormatFaults(f.Config.Faults))
 
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
@@ -305,6 +332,13 @@ func parseCorpusEntry(file, body string) (corpusEntry, error) {
 				return entry, fmt.Errorf("corpus: %s: seed %q is not a number", file, value)
 			}
 			entry.cfg.Seed, haveSeed = n, true
+
+		case "ops":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return entry, fmt.Errorf("corpus: %s: ops %q is not a number", file, value)
+			}
+			entry.ops = n
 
 		case "steps":
 			n, err := strconv.Atoi(value)

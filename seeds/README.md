@@ -27,6 +27,15 @@ Minimized to three workload steps and one flipped bit.
 needed, on any machine, ever. `fixed_in` is the commit that made the seed pass,
 or `pending` while it still reproduces.
 
+`ops` is how many filesystem operations the run performed when the seed was
+recorded, and it is the corpus's own decay detector. A fault's position is an
+index into that stream, so changing the log's I/O pattern — adding a directory
+sync, say — moves every seed to a different point in its run. The seeds keep
+passing and stop testing what they were recorded for. `task sim:corpus` compares
+the count and prints `drifted` when it has moved, which is a warning rather than
+a failure: a seed that fires somewhere else is still worth running, and it is no
+longer evidence about the bug named in its file.
+
 ### Faults
 
 Written `kind@position` or `kind@position:argument`, space separated. Position

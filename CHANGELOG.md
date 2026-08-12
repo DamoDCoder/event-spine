@@ -42,9 +42,22 @@ grouped under `Unreleased`.
 - Snapshots: a serialized projection and the offset it was folded to, framed as
   a record so a torn one is detectable.
 - The M2 result, `docs/decisions/m2-owned-log.md`.
+- The simulation harness: a fault catalogue of crashes, write errors, short
+  writes, fsync failures, bit flips, and backwards clock jumps; swarm-randomized
+  fault configurations; invariants checked after every step; automatic
+  minimization; `spine sim sweep`; and the M3 result in
+  `docs/decisions/m3-simulation-harness.md`.
+- `ops` in seed front matter, and the `drifted` warning that reports when a
+  stored seed no longer fires where it was recorded.
 
 ### Fixed
 
+- A flipped bit in a record's offset field was accepted, putting the log's tail
+  at 4611686018427387911 and assigning every later append an offset from there.
+  The offset field was outside CRC coverage on the reasoning that a reader
+  always knows which offset comes next — a reasoning compaction invalidated and
+  nothing noticed. The checksum now covers it. Found by the first swarm sweep,
+  `seeds/0008.md`.
 - A crash could remove a whole segment, including records whose `Sync` had
   returned. The log fsynced the segment file and never the directory that named
   it, and a file whose directory entry was never synced does not survive a power
@@ -206,6 +219,26 @@ M2 reads, same machine, after adding the cursor:
 - This is the number that says a streaming consumer must use a `Reader` rather
   than a loop over `Read`, and it is why the index interval is configuration
   rather than a constant.
+
+M3, on 2026-08-12:
+
+- The gate held on the first sweep. A single flipped bit in a record's offset
+  field was accepted, because M2's compaction work invalidated the reasoning
+  that kept the offset outside the checksum and nothing noticed. The argument
+  lived in one file and the change that killed it lived in another; a random bit
+  does not care which.
+- An operation that renames or writes before it syncs can fail and still have
+  happened. Three seeds found that shape — a partial `CompactAll`, a commit
+  whose fsync failed, a compaction whose directory sync failed — so it is stated
+  as a property of the design rather than fixed a third time.
+- Half the corpus is the checker. Three of six entries are false positives the
+  harness produced, kept and labelled, because a checker that blames the wrong
+  component teaches everyone to skim its output.
+- The corpus was already rotting. A fault's position is an index into the run's
+  operation stream, and seed 0001 was recorded against 51 operations in a run
+  that is 84 now: `crash@7` has not been the crash that failed for a milestone.
+  Found by looking rather than by a test, which is the uncomfortable part.
+- 2,000 seeds, 0 failures, after the fixes.
 
 Carried over from the ideas cradle, where this project was designed:
 
