@@ -65,9 +65,15 @@ grouped under `Unreleased`.
   seed front matter and defaulting to the old constants so existing seeds keep
   their meaning. Sweeps report how many modes and shapes they used, and a test
   asserts they vary.
-- `sim.FS.CrashExtend`: the power cut that leaves a file longer than its
-  contents, with zeros in the gap. Real ext4 does this and the simulator could
-  not, which is why a bug that needed it went unfound for four milestones.
+- `sim.FS.CrashExtend` and `sim.FS.CrashTorn`: the power cut that leaves a file
+  longer than its contents with zeros in the gap, and the one that keeps a
+  prefix of the unsynced bytes. Real ext4 does the first and the simulator could
+  not, which is why a bug that needed it went unfound for four milestones; the
+  second is the most ordinary shape of all and was missing too. All three crash
+  shapes are fault kinds, so the sweep draws between them and the crash matrix
+  runs every point in each.
+- The power cut runs under xfs as well as ext4, from a pinned image stage
+  carrying both sets of tools.
 - `spine replay`: scrub a seed step by step, inspect one step in full, list the
   filesystem operations with the faults that fired on them, or diff a failing
   run against the same seed with no faults. The M4 result is in

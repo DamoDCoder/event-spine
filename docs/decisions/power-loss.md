@@ -218,10 +218,40 @@ the axis that mattered was found by a real disk, not by widening the simulation.
 
 **The power cut runs in CI.** Five cuts in `task ci`, fifty in `ci:nightly`.
 
-What is left is the same gap in a narrower form. The simulator has now been
-wrong twice about what a crash leaves behind — once about directory entries,
-once about file length — and both times a real filesystem was needed to notice.
-The next assumption worth doubting is that `CrashExtend` and `Crash` are the
-only two shapes a real crash takes. A cut landing inside a page write, a
-filesystem other than ext4, and a drive that reorders writes are all still
-outside what either the model or this test can produce.
+**Two of the three remaining gaps are closed**, and neither closing found
+anything.
+
+`sim.FS.CrashTorn` is the third crash shape: a prefix of the unsynced bytes
+survives, which is what a disk caught midway through writeback holds, and
+whatever lands on the boundary is a record cut in half. All three shapes are
+fault kinds, so the sweep draws between them and the crash matrix runs every
+point in each — 1,188 points across six seeds rather than 396. What the disk is
+left holding is now part of a crash point's position rather than an assumption
+baked into it.
+
+The power cut also runs under **xfs** as well as ext4, from a pinned image stage
+carrying both sets of tools. The durability assumptions here are about what
+POSIX promises rather than about any one implementation, and two journals
+agreeing is worth more than one agreeing with itself. 20 of 20 cuts across both.
+
+Neither found a bug. That is worth stating plainly: the coverage was worth
+having and it did not pay the way the durability axis did.
+
+## What Is Left
+
+**A reordering drive.** Every write in these tests reaches the device in the
+order it was issued. Real controllers and real drives do not promise that, and a
+barrier the log never issues is one nothing here would miss. This is the gap
+that needs hardware or a hypervisor that can cut power between two writes, and
+it is the last one on the list from M2 that is still open.
+
+**One workload shape at a time.** The harness varies segment sizes, batch sizes,
+payloads, modes, and crash shapes, but every seed still drives the same rhythm of
+appends, syncs, commits, compactions, and snapshots. A second workload — a
+reader racing a compactor, say — would explore states this one cannot reach.
+
+**The model is still a model.** It has been wrong twice, both times about what a
+crash leaves behind, and both times a real filesystem was needed to notice. The
+useful lesson is not that the two known gaps are closed; it is that gaps in a
+model are invisible from inside it, and the only instrument that has ever found
+one here is a real disk.
