@@ -29,6 +29,16 @@ COPY . .
 ENV CGO_ENABLED=1
 CMD ["go", "test", "-race", "-count=1", "./..."]
 
+# ------------------------------------------------------------- powercut stage
+# The power-loss test needs to make and mount filesystems, so it carries the
+# tools for more than one of them. Two filesystems rather than one because the
+# log's durability assumptions are about POSIX, not about ext4, and the only way
+# to find out whether that is true is to run them somewhere else — see
+# docs/decisions/power-loss.md.
+FROM build AS powercut
+RUN apt-get update && apt-get install -y --no-install-recommends xfsprogs \
+    && rm -rf /var/lib/apt/lists/*
+
 # --------------------------------------------------------------- runtime stage
 # Distroless: no shell, no package manager, nothing to exploit and nothing to
 # drift. A reader with a container runtime and nothing else can run this.

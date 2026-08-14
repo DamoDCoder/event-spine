@@ -154,6 +154,32 @@ func (f *FS) CrashExtend() {
 	f.live = live
 }
 
+// CrashTorn is a power cut that caught writeback partway through.
+//
+// Crash keeps none of the unsynced bytes and CrashExtend keeps none of them
+// while keeping the length. This keeps a prefix of them, which is what a disk
+// that was midway through writing back actually holds — and it is the most
+// ordinary of the three, not the exotic one.
+//
+// The prefix is a percentage rather than a fraction so nothing here does
+// floating point. Whatever lands at the boundary is a record cut in half, which
+// is the torn tail recovery was built to truncate, so this is the shape that
+// exercises the framing checks rather than the length ones.
+func (f *FS) CrashTorn(percent int) {
+	percent = min(max(percent, 0), 100)
+
+	live := make(map[string]*inode, len(f.durable))
+	for name, n := range f.durable {
+		kept := append([]byte(nil), n.durable...)
+		if extra := len(n.data) - len(n.durable); extra > 0 {
+			kept = append(kept, n.data[len(n.durable):len(n.durable)+extra*percent/100]...)
+		}
+		n.data = kept
+		live[name] = n
+	}
+	f.live = live
+}
+
 // Overwrite replaces bytes already on the disk, which no caller of core.FS can
 // do.
 //

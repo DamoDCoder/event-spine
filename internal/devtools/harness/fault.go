@@ -50,6 +50,17 @@ const (
 	// deadline must survive: a deadline computed from a clock that went
 	// backwards can sit unreachably far in the future.
 	ClockBack
+
+	// CrashZeros stops the machine leaving files longer than their contents,
+	// with zeros in the gap. ext4 journals metadata separately from data, so
+	// this is what it does; the simulator could not produce it for four
+	// milestones and a bug hid in the difference. See power-loss.md.
+	CrashZeros
+
+	// CrashTorn stops the machine partway through writeback, so a prefix of
+	// the unsynced bytes survives. Arg is that prefix as a percentage, and
+	// whatever lands on the boundary is a record cut in half.
+	CrashTorn
 )
 
 var kindNames = map[Kind]string{
@@ -59,10 +70,17 @@ var kindNames = map[Kind]string{
 	SyncError:  "syncerror",
 	BitFlip:    "bitflip",
 	ClockBack:  "clockback",
+	CrashZeros: "crashzeros",
+	CrashTorn:  "crashtorn",
 }
 
 // Kinds is every fault, in the order a swarm configuration considers them.
-var Kinds = []Kind{Crash, WriteError, ShortWrite, SyncError, BitFlip, ClockBack}
+var Kinds = []Kind{Crash, WriteError, ShortWrite, SyncError, BitFlip, ClockBack, CrashZeros, CrashTorn}
+
+// Crashes are the fault kinds that stop the machine. They differ only in what
+// the disk is left holding, which is the thing a simulator is most likely to be
+// optimistic about.
+var Crashes = []Kind{Crash, CrashZeros, CrashTorn}
 
 func (k Kind) String() string {
 	if name, ok := kindNames[k]; ok {

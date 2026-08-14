@@ -27,7 +27,9 @@
 set -euo pipefail
 
 CUTS=${CUTS:-10}
-DISK_MB=${DISK_MB:-256}
+# 512 MiB because xfs refuses anything under 300, and both filesystems get the
+# same device so the comparison is between journals rather than between sizes.
+DISK_MB=${DISK_MB:-512}
 IMAGE=${IMAGE:-event-spine:powercut}
 
 # A guarantee that is only checked when someone remembers is one that decays,
@@ -46,7 +48,7 @@ if [ "${INSIDE_CONTAINER:-}" != "1" ]; then
 
     # The outer half: build the binary and re-enter privileged, because loop
     # devices and mounting need capabilities a normal container does not have.
-    docker build -q --target build -t "$IMAGE" . >/dev/null
+    docker build -q --target powercut -t "$IMAGE" . >/dev/null
     exec docker run --rm --privileged \
         -e INSIDE_CONTAINER=1 -e CUTS="$CUTS" -e DISK_MB="$DISK_MB" \
         -v "$(pwd)/scripts:/scripts:ro" \
@@ -64,13 +66,26 @@ mkdir -p /cut /mnt/disk /mnt/snapshot
 # when the power goes.
 sysctl -q -w vm.dirty_expire_centisecs=360000 vm.dirty_writeback_centisecs=360000
 
+# The filesystems to cut the power under. The log's durability assumptions are
+# about what POSIX promises rather than about any one implementation, and ext4
+# and xfs journal differently enough that agreeing is worth something.
+FILESYSTEMS=${FILESYSTEMS:-"ext4 xfs"}
+
 survived=0
+attempted=0
+for FS in $FILESYSTEMS; do
+echo "== $FS"
 for cut in $(seq 1 "$CUTS"); do
+    attempted=$((attempted + 1))
     rm -f /cut/disk.img /cut/snapshot.img /cut/acked
     truncate -s "${DISK_MB}M" /cut/disk.img
 
     LOOP=$(losetup --find --show --direct-io=on /cut/disk.img)
-    mkfs.ext4 -q -F "$LOOP"
+    case "$FS" in
+        ext4) mkfs.ext4 -q -F "$LOOP" ;;
+        xfs) mkfs.xfs -q -f "$LOOP" ;;
+        *) echo "powercut: no mkfs rule for $FS" >&2; exit 1 ;;
+    esac
     mount "$LOOP" /mnt/disk
 
     "$SPINE" powercut write --dir /mnt/disk --acked /cut/acked &
@@ -93,17 +108,18 @@ for cut in $(seq 1 "$CUTS"); do
 
     SNAP=$(losetup --find --show /cut/snapshot.img)
     mount "$SNAP" /mnt/snapshot
-    printf 'cut %2d: ' "$cut"
+    printf '%s cut %2d: ' "$FS" "$cut"
     if "$SPINE" powercut verify --dir /mnt/snapshot --acked /cut/acked; then
         survived=$((survived + 1))
     else
         umount -l /mnt/snapshot
         losetup -d "$SNAP"
-        echo "FAILED at cut $cut"
+        echo "FAILED on $FS at cut $cut"
         exit 1
     fi
     umount -l /mnt/snapshot
     losetup -d "$SNAP"
+done
 done
 
 # ------------------------------------------------------------ the negative control
@@ -148,4 +164,4 @@ losetup -d "$SNAP"
 echo "         the control failed as it must: unsynced data did not survive"
 
 echo
-echo "powercut: $survived of $CUTS cuts lost nothing that was acknowledged as durable"
+echo "powercut: $survived of $attempted cuts across $FILESYSTEMS lost nothing acknowledged as durable"

@@ -46,6 +46,16 @@ func CleanOps(cfg Config) (int, uint64, error) {
 	return fs.Ops(), fs.Signature(), nil
 }
 
+// isCrash reports whether a fault stops the machine.
+func isCrash(kind Kind) bool {
+	for _, crash := range Crashes {
+		if kind == crash {
+			return true
+		}
+	}
+	return false
+}
+
 // isInjected reports whether an error is the harness's own doing.
 func isInjected(err error) bool {
 	return errors.Is(err, ErrCrashed) || errors.Is(err, errInjected)
@@ -118,12 +128,24 @@ func Matrix(seed int64, maxPoints int) (Report, error) {
 		points = maxPoints
 	}
 
+	// Every point, in all three crash shapes. The matrix proves a property
+	// at every position rather than sampling, and what the disk is left
+	// holding is part of the position.
 	for at := 1; at <= points; at++ {
-		cfg := Config{Seed: seed, Faults: []Fault{{Kind: Crash, At: at}}}
-		report.Runs++
-		report.Faults[Crash]++
-		if err := Run(cfg); err != nil {
-			report.Failures = append(report.Failures, Failure{Config: cfg, Err: err})
+		for _, kind := range Crashes {
+			fault := Fault{Kind: kind, At: at}
+			if kind == CrashTorn {
+				// Half the unsynced tail, which puts the cut
+				// inside a record rather than at either end.
+				fault.Arg = 50
+			}
+
+			cfg := Config{Seed: seed, Faults: []Fault{fault}}
+			report.Runs++
+			report.Faults[kind]++
+			if err := Run(cfg); err != nil {
+				report.Failures = append(report.Failures, Failure{Config: cfg, Err: err})
+			}
 		}
 	}
 
@@ -243,7 +265,7 @@ func swarm(seed int64) Config {
 
 		// A crash ends the run, so more than one is the same run twice.
 		n := 1
-		if kind != Crash {
+		if !isCrash(kind) {
 			n = 1 + src.Intn(3)
 		}
 		for range n {
@@ -253,6 +275,11 @@ func swarm(seed int64) Config {
 				fault.Arg = int64(src.Intn(1 << 20))
 			case ShortWrite:
 				fault.Arg = int64(1 + src.Intn(64))
+			case CrashTorn:
+				// How much of the unsynced tail made it. The
+				// ends matter as much as the middle: none of it
+				// is Crash and all of it is a clean stop.
+				fault.Arg = int64(src.Intn(101))
 			case ClockBack:
 				fault.At = src.Intn(cfg.Steps)
 				fault.Arg = int64(1 + src.Intn(10_000))
