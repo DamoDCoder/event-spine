@@ -60,6 +60,15 @@ func (r *Reader) Next() (Record, error) {
 		}
 	}
 
+	// seek can legitimately find nothing at or after the cursor while the
+	// log's tail is still above it: a crash that truncates one segment and
+	// leaves the next one empty opens a hole running to the end, and every
+	// offset in it is missing. Reaching that is the same thing as catching
+	// up, and reading through the nil cursor instead is seeds/0290.md.
+	if r.seg == nil {
+		return Record{}, ErrEndOfLog
+	}
+
 	// The cursor asks for the next record at or after where it stands,
 	// rather than for a particular offset. Compaction drops records and
 	// keeps their offsets as gaps, and a reader that insisted on the next
