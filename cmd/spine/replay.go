@@ -15,6 +15,7 @@ func replay(args []string) error {
 		seed   = fs.Int64("seed", 0, "the seed to replay")
 		steps  = fs.Int("steps", 0, "workload steps, or 0 for the default")
 		faults = fs.String("faults", "", "faults to inject, as kind@position[:arg], space separated")
+		mode   = fs.String("durability", "", "log durability mode: batch, sync, or os")
 		at     = fs.Int("at", -1, "scrub to this step and describe it in full")
 		ops    = fs.Bool("ops", false, "print the filesystem operations, with the faults that fired")
 		diff   = fs.Bool("diff", false, "compare against the same seed with no faults, and report where they part")
@@ -30,7 +31,7 @@ func replay(args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg := harness.Config{Seed: *seed, Steps: *steps, Faults: parsed}
+	cfg := harness.Config{Seed: *seed, Steps: *steps, Faults: parsed, Durability: *mode}
 
 	if *diff {
 		return replayDiff(cfg)

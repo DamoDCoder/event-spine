@@ -238,7 +238,7 @@ func sameState(a, b State) bool {
 // Without returns the configuration with its faults removed, which is the run a
 // failing seed is compared against.
 func Without(cfg Config) Config {
-	return Config{Seed: cfg.Seed, Steps: cfg.Steps}
+	return Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability}
 }
 
 // FormatState renders a state as one line of a scrub.

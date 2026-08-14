@@ -102,7 +102,7 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 	// crash to take.
 	logCfg := log.Config{
 		Segment:     log.Options{MaxBytes: 4 << 10, IndexInterval: 256},
-		Durability:  log.Batch,
+		Durability:  durabilityOf(cfg),
 		SyncRecords: 16,
 		Clock:       clock,
 	}
@@ -172,6 +172,18 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 	}
 
 	return w, nil
+}
+
+// durabilityOf maps a config's mode name onto the log's setting.
+func durabilityOf(cfg Config) log.Durability {
+	switch cfg.Durability {
+	case "sync":
+		return log.Sync
+	case "os":
+		return log.OS
+	default:
+		return log.Batch
+	}
 }
 
 // act performs one workload action, chosen by the seed.

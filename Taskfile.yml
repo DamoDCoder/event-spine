@@ -83,8 +83,9 @@ tasks:
     vars:
       STEPS: '{{.STEPS | default "0"}}'
       FAULTS: '{{.FAULTS | default ""}}'
+      DURABILITY: '{{.DURABILITY | default ""}}'
     cmds:
-      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}"
+      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}" --durability "{{.DURABILITY}}"
 
   sim:corpus:
     desc: Replay every seed in the regression corpus
@@ -115,6 +116,16 @@ tasks:
       SEED: '{{.SEED | default "100000"}}'
     cmds:
       - go run ./cmd/spine sim sweep --seed {{.SEED}} --count {{.COUNT}} --minimize --out seeds
+
+  verify:powercut:
+    desc: Cut the power under a real filesystem and check what survived
+    # Privileged, because loop devices and mounting need capabilities a normal
+    # container does not have. See scripts/powercut.sh for what it does and
+    # docs/decisions/power-loss.md for what it proves and what it does not.
+    vars:
+      CUTS: '{{.CUTS | default "20"}}'
+    cmds:
+      - CUTS={{.CUTS}} ./scripts/powercut.sh
 
   demo:replay:
     desc: Reproduce docs/walkthrough-replay.md by reverting one fix in a scratch worktree

@@ -87,8 +87,9 @@ func simSweep(args []string) error {
 	report := harness.Sweep(*from, *count, *minimize)
 
 	for _, f := range report.Failures {
-		fmt.Printf("FAIL seed %d steps %d faults %s\n     %v\n",
-			f.Config.Seed, f.Config.Steps, harness.FormatFaults(f.Config.Faults), f.Err)
+		fmt.Printf("FAIL seed %d steps %d %s faults %s\n     %v\n",
+			f.Config.Seed, f.Config.Steps, durabilityName(f.Config),
+			harness.FormatFaults(f.Config.Faults), f.Err)
 		if *out == "" {
 			continue
 		}
@@ -185,6 +186,7 @@ func repro(args []string) error {
 		steps  = fs.Int("steps", 0, "workload steps, or 0 for the default")
 		faults = fs.String("faults", "", "faults to inject, as kind@position[:arg], space separated")
 		point  = fs.Int("point", 0, "shorthand for --faults crash@N")
+		mode   = fs.String("durability", "", "log durability mode: batch, sync, or os")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -203,7 +205,7 @@ func repro(args []string) error {
 		if err != nil {
 			return err
 		}
-		cfg := harness.Config{Seed: *seed, Steps: *steps, Faults: parsed}
+		cfg := harness.Config{Seed: *seed, Steps: *steps, Faults: parsed, Durability: *mode}
 		if err := harness.Run(cfg); err != nil {
 			return fmt.Errorf("seed %d %s reproduces: %w", *seed, harness.FormatFaults(parsed), err)
 		}
@@ -260,6 +262,7 @@ func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
 	body := fmt.Sprintf(`---
 seed: %d
 steps: %d
+durability: %s
 ops: %d
 signature: %016x
 faults: %s
@@ -280,13 +283,23 @@ read yet.
 task repro SEED=%d FAULTS="%s"
 `+"```"+`
 `,
-		f.Config.Seed, f.Config.Steps, ops, signature, harness.FormatFaults(f.Config.Faults), f.Err,
+		f.Config.Seed, f.Config.Steps, durabilityName(f.Config), ops, signature,
+		harness.FormatFaults(f.Config.Faults), f.Err,
 		f.Config.Seed, harness.FormatFaults(f.Config.Faults))
 
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return "", fmt.Errorf("corpus: write %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// durabilityName is the mode a seed file records, defaulting to the one every
+// seed written before the field existed was running.
+func durabilityName(cfg harness.Config) string {
+	if cfg.Durability == "" {
+		return "batch"
+	}
+	return cfg.Durability
 }
 
 // loadCorpus reads the seed files' front matter.
@@ -355,6 +368,14 @@ func parseCorpusEntry(file, body string) (corpusEntry, error) {
 				return entry, fmt.Errorf("corpus: %s: ops %q is not a number", file, value)
 			}
 			entry.ops = n
+
+		case "durability":
+			switch value {
+			case "batch", "sync", "os":
+				entry.cfg.Durability = value
+			default:
+				return entry, fmt.Errorf("corpus: %s: %q is not a durability mode", file, value)
+			}
 
 		case "steps":
 			n, err := strconv.Atoi(value)

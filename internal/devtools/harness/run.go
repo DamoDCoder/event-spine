@@ -35,7 +35,7 @@ func Run(cfg Config) error {
 // produces and what a count would call unchanged.
 func CleanOps(cfg Config) (int, uint64, error) {
 	fs := NewFS(nil)
-	if _, err := runWorkload(fs, Config{Seed: cfg.Seed, Steps: cfg.Steps}); err != nil {
+	if _, err := runWorkload(fs, Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability}); err != nil {
 		return 0, 0, err
 	}
 	return fs.Ops(), fs.Signature(), nil
@@ -146,7 +146,7 @@ func Sweep(from int64, count int, minimize bool) Report {
 		// workload is capable of doing.
 		if i%16 == 0 {
 			clean := NewFS(nil)
-			if w, err := runWorkload(clean, Config{Seed: seed, Steps: cfg.Steps}); err == nil {
+			if w, err := runWorkload(clean, Config{Seed: seed, Steps: cfg.Steps, Durability: cfg.Durability}); err == nil {
 				report.Compactions += w.compactions
 				report.Dropped += w.dropped
 				report.Snapshots += w.snapshots
@@ -177,8 +177,19 @@ func swarm(seed int64) Config {
 	// How many operations a run of this length performs, so faults land
 	// where there is something to break. Measured rather than guessed: a
 	// fault scheduled past the end of the run is a fault that does nothing.
+	// The durability mode is part of the run, drawn from the seed like
+	// everything else. Batch stays the most common because it is the
+	// default a caller gets, but a sweep that only ever ran it missed a
+	// hole in os mode for two milestones.
+	switch src.Intn(4) {
+	case 0:
+		cfg.Durability = "os"
+	case 1:
+		cfg.Durability = "sync"
+	}
+
 	probe := NewFS(nil)
-	if _, err := runWorkload(probe, Config{Seed: seed, Steps: cfg.Steps}); err != nil {
+	if _, err := runWorkload(probe, Config{Seed: seed, Steps: cfg.Steps, Durability: cfg.Durability}); err != nil {
 		return cfg
 	}
 	ops := probe.Ops()
@@ -230,6 +241,8 @@ func swarm(seed int64) Config {
 func Minimize(cfg Config, failure error) (Config, error) {
 	want := failure.Error()
 
+	// The mode is never minimized away: it is what the run is, not a fault
+	// injected into it.
 	reproduces := func(candidate Config) bool {
 		err := Run(candidate)
 		return err != nil && err.Error() == want
@@ -241,7 +254,7 @@ func Minimize(cfg Config, failure error) (Config, error) {
 	for changed {
 		changed = false
 		for i := range cfg.Faults {
-			shorter := Config{Seed: cfg.Seed, Steps: cfg.Steps}
+			shorter := Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability}
 			shorter.Faults = append(shorter.Faults, cfg.Faults[:i]...)
 			shorter.Faults = append(shorter.Faults, cfg.Faults[i+1:]...)
 
@@ -261,7 +274,7 @@ func Minimize(cfg Config, failure error) (Config, error) {
 		steps = DefaultSteps
 	}
 	for span := steps / 2; span >= 1; span /= 2 {
-		shorter := Config{Seed: cfg.Seed, Steps: steps - span, Faults: cfg.Faults}
+		shorter := Config{Seed: cfg.Seed, Steps: steps - span, Faults: cfg.Faults, Durability: cfg.Durability}
 		if shorter.Steps > 0 && reproduces(shorter) {
 			steps = shorter.Steps
 		}

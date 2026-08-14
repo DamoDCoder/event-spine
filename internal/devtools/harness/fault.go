@@ -103,12 +103,23 @@ func (f Fault) String() string {
 	return fmt.Sprintf("%s@%d", f.Kind, f.At)
 }
 
-// Config is a complete description of one run: the same three fields reproduce
-// it exactly, on any machine, which is what a corpus entry stores.
+// Config is a complete description of one run: these fields reproduce it
+// exactly, on any machine, which is what a corpus entry stores.
 type Config struct {
 	Seed   int64
 	Steps  int
 	Faults []Fault
+
+	// Durability is the log mode the workload runs in. Empty means batch,
+	// which is what every seed recorded before this field existed — so
+	// omitting it keeps those seeds meaning what they meant.
+	//
+	// It exists because the workload ran only in batch mode for two
+	// milestones, and that is why simulation missed the hole that
+	// scripts/powercut.sh found on real ext4: in batch mode a roll syncs
+	// the outgoing segment, so the gap it opened in os mode could not
+	// appear here.
+	Durability string
 }
 
 // FormatFaults renders a fault list as the corpus stores it.
