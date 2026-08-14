@@ -27,6 +27,12 @@ type Reader struct {
 	// own length rather than searching the index for every offset.
 	pos  int64
 	next Offset
+
+	// generation is the log's when this cursor last resolved a segment.
+	// Compaction replaces a segment's file, which invalidates both the
+	// handle and the position, so a cursor that finds the log has moved on
+	// re-resolves rather than reading what it was holding.
+	generation uint64
 }
 
 // Reader returns a cursor positioned at from.
@@ -39,7 +45,7 @@ func (l *Log) Reader(from Offset) (*Reader, error) {
 		return nil, fmt.Errorf("%w: %d is outside the log, which holds [%d, %d]",
 			ErrNotFound, from, l.First(), l.Next())
 	}
-	return &Reader{log: l, next: from}, nil
+	return &Reader{log: l, next: from, generation: l.Generation()}, nil
 }
 
 // Next returns the record at the cursor and advances it.
@@ -53,8 +59,8 @@ func (r *Reader) Next() (Record, error) {
 	}
 
 	// The segment changes when the cursor starts, when it crosses a
-	// boundary, and never otherwise.
-	if r.seg == nil || r.next >= r.seg.Next() {
+	// boundary, and when compaction has replaced one underneath it.
+	if r.seg == nil || r.next >= r.seg.Next() || r.generation != r.log.Generation() {
 		if err := r.seek(r.next); err != nil {
 			return Record{}, err
 		}
@@ -94,6 +100,7 @@ func (r *Reader) Seek(off Offset) error {
 		// so the next call finds whichever segment the writer has moved
 		// on to by then.
 		r.seg, r.pos, r.next = nil, 0, off
+		r.generation = r.log.Generation()
 		return nil
 	}
 	return r.seek(off)
@@ -115,6 +122,7 @@ func (r *Reader) seek(off Offset) error {
 		pos, found, err := seg.locateFrom(off)
 		if err == nil {
 			r.seg, r.pos, r.next = seg, pos, found
+			r.generation = r.log.Generation()
 			return nil
 		}
 		if !errors.Is(err, ErrNotFound) {
@@ -133,6 +141,7 @@ func (r *Reader) seek(off Offset) error {
 
 	// Caught up: there is nothing at or after off yet.
 	r.seg, r.pos, r.next = nil, 0, off
+	r.generation = r.log.Generation()
 	return nil
 }
 

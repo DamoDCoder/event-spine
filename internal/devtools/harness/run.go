@@ -15,7 +15,7 @@ import (
 func Run(cfg Config) error {
 	fs := NewFS(cfg.Faults)
 	w, err := runWorkload(fs, cfg)
-	if err != nil && !isInjected(err) && !(w.corrupted && isDamage(err)) {
+	if err != nil && !isInjected(err) && !(w.corrupted() && isDamage(err)) {
 		return err
 	}
 	return check(fs, w, cfg.Shape.withDefaults())

@@ -77,7 +77,7 @@ func Replay(cfg Config) Trace {
 	if err != nil {
 		trace.Stopped = err
 	}
-	if err != nil && !isInjected(err) && !(w.corrupted && isDamage(err)) {
+	if err != nil && !isInjected(err) && !(w.corrupted() && isDamage(err)) {
 		trace.Failure = err
 		return trace
 	}

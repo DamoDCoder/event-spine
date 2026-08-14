@@ -112,6 +112,13 @@ func (l *Log) Compact(base Offset) (Compaction, error) {
 	}
 	delete(l.sealed, base)
 
+	// Any reader sitting in that segment is now holding a closed handle and
+	// a position into a file that has been replaced. Bumping the generation
+	// is how they find out: the alternative is reference counting every
+	// segment, which is a lot of machinery for an event that happens once
+	// per compaction.
+	l.generation++
+
 	result.Kept = len(survivors)
 	result.Dropped = src.records() - len(survivors)
 	result.After = written

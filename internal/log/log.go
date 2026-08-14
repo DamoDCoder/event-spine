@@ -105,7 +105,17 @@ type Log struct {
 	// commits is the consumer groups' offsets log, opened on the first
 	// mention of a group. A log nobody consumes creates no file to say so.
 	commits *commits
+
+	// generation counts the times a segment was replaced underneath the
+	// readers. Compaction is the only thing that does it, and a cursor that
+	// kept reading afterwards was holding a closed handle and a byte
+	// position into a layout that no longer existed. See seeds/0012.md.
+	generation uint64
 }
+
+// Generation reports how many times a segment has been replaced. A reader
+// compares it to know whether the ground moved.
+func (l *Log) Generation() uint64 { return l.generation }
 
 // Open opens or creates a log in the directory the filesystem is rooted at.
 //

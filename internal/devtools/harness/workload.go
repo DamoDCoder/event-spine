@@ -50,18 +50,23 @@ type witness struct {
 	// and keeps their offsets as gaps.
 	compacted bool
 
-	// corrupted records that a bit flip fired. After one, a durable record
-	// may be unreadable or gone — but it may never come back wrong, which
-	// is the invariant a checksum exists to keep.
-	corrupted bool
-
 	// snapshot is the last snapshot whose write returned, and is therefore
 	// durable. A later one exists only if its rename also completed.
 	snapshot *log.Snapshot
 
-	// tail is the highest Next() the log ever reported. Offsets are never
-	// reissued, so recovery may not come back above it either.
+	// tail is the highest Next() the log ever reported.
 	tail log.Offset
+
+	// trusted is the offset above which the witness no longer knows what
+	// the log holds.
+	//
+	// Offsets are never reissued while records survive. Corruption breaks
+	// that: recovery truncates back to the damage, the tail regresses, and
+	// the next append is assigned an offset a different record used to have.
+	// Everything below the lowest tail ever seen is still the record the
+	// workload appended there; above it, the witness is out of date and
+	// says so rather than reporting the log as wrong.
+	trusted log.Offset
 
 	// Coverage counters. A harness that quietly stopped compacting would
 	// still pass every invariant it checks, which is the comfortable kind
@@ -128,6 +133,7 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 		attempts:   map[string][]log.Offset{},
 		fs:         fs,
 		durability: durabilityOf(cfg),
+		trusted:    ^log.Offset(0),
 	}
 
 	l, _, err := log.Open(fs, logCfg)
@@ -184,12 +190,6 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 		} else {
 			err = w.act(l, src, step, shape)
 		}
-
-		// A bit flip that fired weakens what the checks may demand: a
-		// record whose bytes were corrupted on the platter may be
-		// unreadable or truncated away. It may never come back wrong,
-		// which is the part a checksum is responsible for.
-		w.corrupted = fs.hasFired(BitFlip)
 
 		if observe != nil && err == nil {
 			observe(l, step)
@@ -261,6 +261,13 @@ func (w *witness) act(l *log.Log, src *sim.Source, step int, shape Shape) error 
 		w.attempts[name] = append(w.attempts[name], off)
 
 		if err := g.Commit(off); err != nil {
+			// Corruption can truncate the log below an offset the
+			// workload believed was durable, and committing past
+			// the tail is then the log refusing an offset it no
+			// longer has rather than a fault.
+			if errors.Is(err, log.ErrNotFound) && w.corrupted() {
+				return nil
+			}
 			return err
 		}
 		w.commits[name] = off
@@ -302,6 +309,13 @@ func (w *witness) maintain(l *log.Log, src *sim.Source) error {
 		off := log.Offset(src.Intn(w.durableCount + 1))
 		state := fmt.Appendf(nil, "folded to %d", off)
 		if err := l.Snapshot(off, state); err != nil {
+			// Same as a commit past the tail: corruption can
+			// truncate the log below an offset the workload
+			// believed was durable, and refusing to snapshot at an
+			// offset the log no longer has is correct.
+			if errors.Is(err, log.ErrNotFound) && w.corrupted() {
+				return nil
+			}
 			return err
 		}
 		w.snapshot = &log.Snapshot{Offset: off, State: state}
@@ -321,7 +335,7 @@ func (w *witness) maintain(l *log.Log, src *sim.Source) error {
 			// After a compaction, an offset that is gone is the
 			// ordinary answer rather than a fault.
 			return nil
-		case errors.Is(err, log.ErrCorrupt) && w.corrupted:
+		case errors.Is(err, log.ErrCorrupt) && w.corrupted():
 			// A flipped bit that the checksum caught is the
 			// checksum working.
 			return nil
@@ -331,6 +345,18 @@ func (w *witness) maintain(l *log.Log, src *sim.Source) error {
 	}
 }
 
+// corrupted reports whether a bit flip has fired, asked at the moment it is
+// needed rather than remembered.
+//
+// A record whose bytes were corrupted on the platter may be unreadable or
+// truncated away; it may never come back wrong, which is the part a checksum is
+// responsible for. Caching the answer before running the checks was wrong for a
+// subtle reason: the checks open segments, opening a segment is a filesystem
+// operation, and a flip scheduled against that operation fires inside the check
+// that was about to ask. The cached answer said no corruption and the scan then
+// found some.
+func (w *witness) corrupted() bool { return w.fs != nil && w.fs.hasFired(BitFlip) }
+
 // checkLive asserts the invariants that must hold at every step of a running
 // log, not only after it is reopened.
 //
@@ -339,14 +365,27 @@ func (w *witness) maintain(l *log.Log, src *sim.Source) error {
 // step 3 and looked fine at step 40, which is most of the ways a log goes
 // wrong.
 func checkLive(l *log.Log, w *witness) error {
-	if err := assert(l.Next() >= w.tail,
+	// The tail may go backwards after corruption truncated a segment and the
+	// restart workload reopened the log, which is recovery reporting damage
+	// rather than the log losing data. Everything above where it landed is
+	// an offset the witness can no longer vouch for: the next append will
+	// reuse it for a different record.
+	if err := assert(l.Next() >= w.tail || w.corrupted(),
 		"the log's tail went backwards, from %d to %d", w.tail, l.Next()); err != nil {
 		return err
 	}
+	if l.Next() < w.tail {
+		w.trusted = min(w.trusted, l.Next())
+	}
 	w.tail = l.Next()
 
+	// A commit can end up past the tail once corruption has truncated the
+	// events out from under it: the commits log is a separate file and
+	// survives damage to a segment. That is a true report of a damaged disk
+	// rather than a fault in the log, and check makes the same allowance
+	// after the run.
 	for name, committed := range w.commits {
-		if err := assert(committed <= l.Next(),
+		if err := assert(committed <= l.Next() || w.corrupted(),
 			"group %s is committed at %d, past the tail at %d", name, committed, l.Next()); err != nil {
 			return err
 		}
@@ -364,7 +403,7 @@ func checkLive(l *log.Log, w *witness) error {
 		if errors.Is(err, log.ErrEndOfLog) {
 			return nil
 		}
-		if errors.Is(err, log.ErrCorrupt) && w.corrupted {
+		if errors.Is(err, log.ErrCorrupt) && w.corrupted() {
 			return nil
 		}
 		if err != nil {

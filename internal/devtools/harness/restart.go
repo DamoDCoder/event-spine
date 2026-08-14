@@ -47,6 +47,13 @@ func (w *witness) consume(l *log.Log, src *sim.Source) error {
 			return err
 		}
 		w.reader = r
+
+		// Starting over from the beginning is a new consumer, not the
+		// old one going backwards. It happens when corruption truncated
+		// the log below where the cursor had reached, and asserting
+		// monotonicity across that discontinuity would be asserting
+		// something nobody promised.
+		w.delivered = false
 	}
 
 	for range 1 + src.Intn(8) {
@@ -103,31 +110,40 @@ func (w *witness) reopen(l *log.Log, shape Shape) (*log.Log, error) {
 	}
 	w.restarts++
 
-	// A restart is not a crash. Nothing was dropped, so nothing may be
-	// missing.
-	if reopened.Next() < before {
-		return reopened, fmt.Errorf("a clean restart lost records: tail was %d, is %d", before, reopened.Next())
-	}
-	for name, want := range groups {
-		g, err := reopened.Group(name)
-		if err != nil {
-			return reopened, err
+	// A restart is not a crash: nothing was dropped, so nothing may be
+	// missing. Unless a bit flip fired, in which case recovery truncating
+	// from the damage is the log reporting a broken disk rather than losing
+	// data — the same weakening the main checks apply, for the same reason,
+	// and seeds/0109.md is what happens without it.
+	if !w.corrupted() {
+		if reopened.Next() < before {
+			return reopened, fmt.Errorf("a clean restart lost records: tail was %d, is %d",
+				before, reopened.Next())
 		}
-		got, err := g.Committed()
-		if err != nil {
-			return reopened, fmt.Errorf("group %s lost its commit at %d across a restart: %w", name, want, err)
+		for name, want := range groups {
+			g, err := reopened.Group(name)
+			if err != nil {
+				return reopened, err
+			}
+			got, err := g.Committed()
+			if err != nil {
+				return reopened, fmt.Errorf("group %s lost its commit at %d across a restart: %w",
+					name, want, err)
+			}
+			if got != want {
+				return reopened, fmt.Errorf("group %s was committed at %d and came back at %d",
+					name, want, got)
+			}
 		}
-		if got != want {
-			return reopened, fmt.Errorf("group %s was committed at %d and came back at %d", name, want, got)
-		}
-	}
-	if snapshot >= 0 {
-		snap, err := reopened.LatestSnapshot()
-		if err != nil {
-			return reopened, fmt.Errorf("the snapshot at %d did not survive a restart: %w", snapshot, err)
-		}
-		if int64(snap.Offset) < snapshot {
-			return reopened, fmt.Errorf("the snapshot was at %d and came back at %d", snapshot, snap.Offset)
+		if snapshot >= 0 {
+			snap, err := reopened.LatestSnapshot()
+			if err != nil {
+				return reopened, fmt.Errorf("the snapshot at %d did not survive a restart: %w", snapshot, err)
+			}
+			if int64(snap.Offset) < snapshot {
+				return reopened, fmt.Errorf("the snapshot was at %d and came back at %d",
+					snapshot, snap.Offset)
+			}
 		}
 	}
 

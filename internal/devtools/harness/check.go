@@ -24,7 +24,7 @@ func check(fs *FS, w *witness, shape Shape) error {
 
 	l, rec, err := log.Open(fs.recovered(), logCfg)
 	if err != nil {
-		if w.corrupted {
+		if w.corrupted() {
 			// A log that refuses to open a corrupted disk is a log
 			// reporting damage rather than guessing past it.
 			return nil
@@ -33,7 +33,7 @@ func check(fs *FS, w *witness, shape Shape) error {
 	}
 	defer l.Close()
 
-	if !w.corrupted {
+	if !w.corrupted() {
 		if err := assert(rec.Corrupt == nil,
 			"recovery reported corruption where none was injected: %v", rec.Corrupt); err != nil {
 			return err
@@ -68,7 +68,7 @@ func check(fs *FS, w *witness, shape Shape) error {
 	next := l.Next()
 	offs, err := l.Append(core.Event{Key: "after", Schema: 1, Payload: []byte("recovered")})
 	if err != nil {
-		if w.corrupted {
+		if w.corrupted() {
 			return nil
 		}
 		return fmt.Errorf("appending after recovery: %w", err)
@@ -81,12 +81,19 @@ func check(fs *FS, w *witness, shape Shape) error {
 // unchanged, or absent for a reason a fault licensed.
 func checkDurableRecords(l *log.Log, w *witness) error {
 	for i := range w.durableCount {
+		// Above the lowest tail the log ever regressed to, this offset
+		// may hold a record a later append put there. The witness is out
+		// of date rather than the log being wrong, which is the same
+		// allowance checkScan makes and for the same reason.
+		if log.Offset(i) >= w.trusted {
+			break
+		}
 		want := w.events[i]
 
 		got, err := l.Read(log.Offset(i))
 		switch {
 		case err == nil:
-		case err != nil && w.corrupted:
+		case err != nil && w.corrupted():
 			// Damaged bytes may be unreadable or truncated away.
 			// Checked before compaction's rule, because a record
 			// that corruption removed has no reason to satisfy it —
@@ -128,7 +135,7 @@ func checkScan(l *log.Log, w *witness) error {
 			return nil
 		}
 		if err != nil {
-			if w.corrupted {
+			if w.corrupted() {
 				return nil
 			}
 			return fmt.Errorf("scanning after offset %d: %w", previous, err)
@@ -154,11 +161,16 @@ func checkScan(l *log.Log, w *witness) error {
 		// failed. Those three are real records at real offsets, and
 		// recovery keeping them is correct — so the check is that they
 		// are the right records, not that they are absent.
-		// Corruption does not excuse this one. The checksum covers the
-		// key, the time, the schema, and the payload, so a read that
-		// succeeded must return what was written — a flipped bit either
-		// fails the checksum or was never in the covered bytes.
-		if i := int(got.Offset); i < len(w.events) {
+		// Corruption does not excuse a wrong record: the checksum covers
+		// the key, the time, the schema, and the payload, so a read that
+		// succeeded must return what was written.
+		//
+		// It does excuse an offset the witness no longer knows. Once
+		// recovery has truncated the log, later appends reuse the
+		// offsets the lost records had, and comparing those against what
+		// used to be there is the checker being out of date rather than
+		// the log being wrong.
+		if i := int(got.Offset); i < len(w.events) && got.Offset < w.trusted {
 			want := w.events[i]
 			if err := assert(got.Event.Key == want.Key && got.Event.Time == want.Time,
 				"offset %d came back as %+v, want %+v", got.Offset, got.Event, want); err != nil {
@@ -178,14 +190,14 @@ func checkGroups(l *log.Log, w *witness) error {
 	for name, want := range w.commits {
 		g, err := l.Group(name)
 		if err != nil {
-			if w.corrupted {
+			if w.corrupted() {
 				continue
 			}
 			return fmt.Errorf("group %s after the run: %w", name, err)
 		}
 		got, err := g.Committed()
 		if err != nil {
-			if w.corrupted {
+			if w.corrupted() {
 				continue
 			}
 			return fmt.Errorf("group %s lost its commit at %d: %w", name, want, err)
@@ -196,7 +208,7 @@ func checkGroups(l *log.Log, w *witness) error {
 		// it — so the log cannot promise the failed commit did not
 		// happen. What it can promise, and what is asserted here, is
 		// that a group never resumes at an offset nobody asked it to.
-		if err := assert(got == want || attempted(w, name, got) || w.corrupted,
+		if err := assert(got == want || attempted(w, name, got) || w.corrupted(),
 			"group %s resumed at %d, which is neither the committed %d nor any offset it asked for",
 			name, got, want); err != nil {
 			return err
@@ -207,7 +219,7 @@ func checkGroups(l *log.Log, w *witness) error {
 		// is then pointed past the end of a log that lost records,
 		// which is a true report of a damaged disk rather than a fault
 		// in the log.
-		if err := assert(got <= l.Next() || w.corrupted,
+		if err := assert(got <= l.Next() || w.corrupted(),
 			"group %s is committed at %d, past the log's tail at %d", name, got, l.Next()); err != nil {
 			return err
 		}
@@ -233,7 +245,7 @@ func checkSnapshot(l *log.Log, w *witness) error {
 
 	snap, err := l.LatestSnapshot()
 	if err != nil {
-		if w.corrupted {
+		if w.corrupted() {
 			return nil
 		}
 		return fmt.Errorf("the snapshot at %d was lost: %w", w.snapshot.Offset, err)
@@ -243,7 +255,7 @@ func checkSnapshot(l *log.Log, w *witness) error {
 		snap.Offset, w.snapshot.Offset); err != nil {
 		return err
 	}
-	if snap.Offset == w.snapshot.Offset && !w.corrupted {
+	if snap.Offset == w.snapshot.Offset && !w.corrupted() {
 		return assert(bytes.Equal(snap.State, w.snapshot.State),
 			"the snapshot at %d came back with %d bytes of state, want %d",
 			snap.Offset, len(snap.State), len(w.snapshot.State))

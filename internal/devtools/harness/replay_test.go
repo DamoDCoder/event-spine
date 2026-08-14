@@ -29,7 +29,7 @@ func TestAReplayDoesNotDisturbTheRunItRecords(t *testing.T) {
 		quiet := NewFS(cfg.Faults)
 		w, err := runWorkload(quiet, cfg)
 		quietFailure := err
-		if err == nil || isInjected(err) || (w.corrupted && isDamage(err)) {
+		if err == nil || isInjected(err) || (w.corrupted() && isDamage(err)) {
 			quietFailure = check(quiet, w, cfg.Shape.withDefaults())
 		}
 
