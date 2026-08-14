@@ -39,6 +39,16 @@ FROM build AS powercut
 RUN apt-get update && apt-get install -y --no-install-recommends xfsprogs \
     && rm -rf /var/lib/apt/lists/*
 
+# --------------------------------------------------- kafka comparison stage
+# The comparison is its own module with its own dependencies, so it is built
+# separately and the spine's own image never carries a Kafka client.
+FROM ${GO_IMAGE} AS kafkacompare
+WORKDIR /src
+COPY . .
+ENV CGO_ENABLED=0
+RUN cd tools/kafkacompare && go build -trimpath -o /out/kafkacompare .
+ENTRYPOINT ["/out/kafkacompare"]
+
 # --------------------------------------------------------------- runtime stage
 # Distroless: no shell, no package manager, nothing to exploit and nothing to
 # drift. A reader with a container runtime and nothing else can run this.

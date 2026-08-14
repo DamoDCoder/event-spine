@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DamoDCoder/event-spine/internal/core"
-	"github.com/DamoDCoder/event-spine/internal/log"
+	"github.com/DamoDCoder/event-spine/core"
+	"github.com/DamoDCoder/event-spine/log"
 )
 
 // check reopens the disk the run left behind and asserts what survived.

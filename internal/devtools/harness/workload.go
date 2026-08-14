@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DamoDCoder/event-spine/internal/core"
-	"github.com/DamoDCoder/event-spine/internal/log"
-	"github.com/DamoDCoder/event-spine/internal/sim"
+	"github.com/DamoDCoder/event-spine/core"
+	"github.com/DamoDCoder/event-spine/log"
+	"github.com/DamoDCoder/event-spine/sim"
 )
 
 // DefaultSteps is how many workload actions a run performs when a config does

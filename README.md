@@ -7,8 +7,31 @@ devtools.
 Every bug reproduces from one integer.
 
 ```bash
-task repro SEED=8412
+task repro SEED=8 STEPS=3 FAULTS="bitflip@5:458021"
 ```
+
+## Using It
+
+The spine is a library with **no third-party dependencies**. It runs in your
+process; there is no server.
+
+```go
+import (
+    "github.com/DamoDCoder/event-spine/log"
+    "github.com/DamoDCoder/event-spine/runtime"
+)
+
+fs, _ := runtime.NewFS("/var/lib/yourapp/log")
+l, recovery, _ := log.Open(fs, log.Config{})
+defer l.Close()
+```
+
+**Read [docs/adopting.md](docs/adopting.md) before integrating.** It covers the
+five behaviours that surprise people, all of them found by simulation or by
+cutting the power, and each linked to the seed that found it.
+
+> **v0: the surface will break.** Pin a version. The packages a consumer imports
+> are `core`, `log`, `runtime`, and `sim`; everything else is `internal/`.
 
 ## Why This Exists
 

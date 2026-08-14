@@ -58,14 +58,13 @@ for _ in $(seq 60); do
     sleep 1
 done
 
-docker build -q --target runtime -t "$IMAGE" . >/dev/null
+docker build -q --target kafkacompare -t "$IMAGE" . >/dev/null
 
 # A volume rather than a tmpfs: a log measured against RAM is not a log measured
 # against a disk, and Kafka is writing to its container's filesystem.
 docker volume create spine-bench-data >/dev/null
 
 docker run --rm --network "$NETWORK" -v spine-bench-data:/data "$IMAGE" \
-    bench compare \
     --broker "${KAFKA}:9092" \
     --dir /data \
     --records "$RECORDS" \

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DamoDCoder/event-spine/internal/core"
-	"github.com/DamoDCoder/event-spine/internal/log"
-	"github.com/DamoDCoder/event-spine/internal/runtime"
+	"github.com/DamoDCoder/event-spine/core"
+	"github.com/DamoDCoder/event-spine/log"
+	"github.com/DamoDCoder/event-spine/runtime"
 )
 
 // powercut is the half of a power-loss test that runs inside the machine being

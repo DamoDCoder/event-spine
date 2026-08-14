@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DamoDCoder/event-spine/internal/log"
+	"github.com/DamoDCoder/event-spine/log"
 )
 
 // State is what the log looked like after one workload step.

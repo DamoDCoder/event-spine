@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DamoDCoder/event-spine/internal/sim"
+	"github.com/DamoDCoder/event-spine/sim"
 )
 
 // Shape is the size of the run: how big segments are, how far apart index

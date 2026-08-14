@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DamoDCoder/event-spine/internal/log"
-	"github.com/DamoDCoder/event-spine/internal/sim"
+	"github.com/DamoDCoder/event-spine/log"
+	"github.com/DamoDCoder/event-spine/sim"
 )
 
 // restart is the second workload: a consumer that keeps stopping.

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DamoDCoder/event-spine/internal/log"
-	"github.com/DamoDCoder/event-spine/internal/sim"
+	"github.com/DamoDCoder/event-spine/log"
+	"github.com/DamoDCoder/event-spine/sim"
 )
 
 // Run executes one configuration and returns the invariant it broke, or nil.

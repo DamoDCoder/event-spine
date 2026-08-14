@@ -22,6 +22,7 @@ tasks:
     desc: Vet and format check
     cmds:
       - go vet {{.GO_PACKAGES}}
+      - cd tools/kafkacompare && go vet ./...
       - test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
 
   check:determinism:

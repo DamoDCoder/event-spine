@@ -27,8 +27,9 @@ goroutines that affect observable ordering. These are injected:
 | Network | `Transport` | `net.Dial`, raw sockets |
 | Concurrency | scheduler tasks | bare `go` statements in production paths |
 
-`task check:determinism` enforces the import rules in CI. It cannot catch every
-case — map iteration order, `select` over multiple ready channels, and floating
+`task check:determinism` enforces the import rules in CI, exempting `cmd/`,
+`sim`, `runtime`, and `internal/devtools` — the packages whose job is to touch
+the machine. It cannot catch every case — map iteration order, `select` over multiple ready channels, and floating
 point across architectures all slip past it. Watch for those by hand:
 
 - Never range a map where order affects output. Sort the keys.
@@ -68,8 +69,20 @@ When a headline claim fails to hold, correct the claim and record why in
 ## Code Conventions
 
 - Go, current stable, pinned in `go.mod` and the `Dockerfile` by digest.
-- `internal/` for everything until three projects consume the spine. No public API
-  promise before then.
+- **The consumer-facing packages are `core`, `log`, `runtime`, and `sim`.**
+  Everything else stays in `internal/`. This replaces the older "`internal/` for
+  everything until three projects consume the spine", which could not survive
+  contact with its own goal: Go's `internal/` rule makes a package literally
+  unimportable, so no project could ever become the first consumer. The rule's
+  intent was *no API stability promise*, and that intent is unchanged — the
+  module is v0, the surface will break, and a consumer pins a version.
+- **The module has no third-party dependencies and should stay that way.** The
+  Kafka comparison needs a client, so it lives in its own module under
+  `tools/kafkacompare`. A project adopting the log does not inherit a Kafka
+  client to get one.
+- The `go` directive is the *floor*, not the target: it is kept as low as the
+  code allows so a consumer is never forced to upgrade. The container pins the
+  toolchain by digest and that is the authoritative build.
 - Keep files under 500 lines.
 - Validate input at system boundaries: decoded records, offsets from callers, and
   anything read from disk are untrusted.

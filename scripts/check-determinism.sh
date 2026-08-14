@@ -15,9 +15,13 @@ FORBIDDEN='^(time|math/rand|math/rand/v2|os|net|crypto/rand)$'
 
 # Directories exempt from the rule, as a regex over package import paths.
 # - cmd/       : the real runtime, where the concrete implementations are built
-# - internal/sim, internal/devtools : the simulator and tooling need real I/O
-# - internal/runtime : the adapters that implement the injected interfaces
-EXEMPT='/(cmd|internal/sim|internal/devtools|internal/runtime)(/|$)'
+# - sim, internal/devtools : the simulator and tooling need real I/O
+# - runtime    : the adapters that implement the injected interfaces
+#
+# These moved out of internal/ when the spine became importable. The rule is
+# about which packages may touch the machine, not about where they live, so the
+# paths changed and the list did not.
+EXEMPT='/(cmd|sim|internal/devtools|runtime)(/|$)'
 
 violations=0
 

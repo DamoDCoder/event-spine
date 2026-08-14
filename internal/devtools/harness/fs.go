@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DamoDCoder/event-spine/internal/core"
-	"github.com/DamoDCoder/event-spine/internal/sim"
+	"github.com/DamoDCoder/event-spine/core"
+	"github.com/DamoDCoder/event-spine/sim"
 )
 
 // ErrCrashed is returned by every filesystem operation after the crash.

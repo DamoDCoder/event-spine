@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DamoDCoder/event-spine/internal/core"
-	"github.com/DamoDCoder/event-spine/internal/sim"
+	"github.com/DamoDCoder/event-spine/core"
+	"github.com/DamoDCoder/event-spine/sim"
 )
 
 // verifyDomain separates the aggregate digest from every other SHA-256 here.
