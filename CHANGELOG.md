@@ -74,6 +74,10 @@ grouped under `Unreleased`.
   runs every point in each.
 - The power cut runs under xfs as well as ext4, from a pinned image stage
   carrying both sets of tools.
+- A second harness workload, `restart`: it closes and reopens the log as it goes,
+  checking that a clean restart loses nothing and that commits and snapshots come
+  back exactly, and it keeps a reader alive across restarts and compactions.
+  Recorded in seed front matter and defaulting to the old rhythm.
 - `spine replay`: scrub a seed step by step, inspect one step in full, list the
   filesystem operations with the faults that fired on them, or diff a failing
   run against the same seed with no faults. The M4 result is in
@@ -81,6 +85,11 @@ grouped under `Unreleased`.
   walkthrough in `docs/walkthrough-replay.md`.
 
 ### Fixed
+
+- A live `Reader` used a segment handle that compaction had closed, and a byte
+  position pointing into a layout the replacement file does not have. The log
+  now counts segment replacements and a cursor re-resolves when the count moves.
+  Found with no fault injected by the restart workload, `seeds/0012.md`.
 
 - `Log.Sync` said it made everything appended so far durable and did not: rolling
   in `os` mode sealed the outgoing segment without syncing it, and `Sync` only

@@ -245,13 +245,34 @@ barrier the log never issues is one nothing here would miss. This is the gap
 that needs hardware or a hypervisor that can cut power between two writes, and
 it is the last one on the list from M2 that is still open.
 
-**One workload shape at a time.** The harness varies segment sizes, batch sizes,
-payloads, modes, and crash shapes, but every seed still drives the same rhythm of
-appends, syncs, commits, compactions, and snapshots. A second workload — a
-reader racing a compactor, say — would explore states this one cannot reach.
+**One workload shape at a time.** *Closed, and it found a bug.* A second
+workload restarts the log as it goes and keeps a cursor alive across those
+restarts and across compactions. It found, on its first sweep and with no fault
+injected, that compaction closes the segment handle a live reader is holding —
+and that the reader's byte position pointed into a layout the replacement file
+does not have. `seeds/0012.md`.
+
+`log-design.md` predicted a reader problem here and named the wrong one: gaps
+after compaction were handled in M2 and tested from both directions. What was
+actually broken is that a cursor's handle and position do not survive the
+segment being replaced.
 
 **The model is still a model.** It has been wrong twice, both times about what a
 crash leaves behind, and both times a real filesystem was needed to notice. The
 useful lesson is not that the two known gaps are closed; it is that gaps in a
 model are invisible from inside it, and the only instrument that has ever found
 one here is a real disk.
+
+**The checker is a model too, and a leakier one.** Six of twelve corpus seeds
+are now the harness rather than the log. The newest four were one mistake in
+four costumes: corruption truncates the log, recovery takes the tail back, later
+appends are handed offsets that different records used to hold, and every part
+of the witness that remembered what was at an offset went stale at once. That is
+worth naming as a property rather than a bug — **offsets are stable while their
+records survive, and not across data loss** — and `seeds/0309.md` records it.
+
+The ratio is not improving, and it should not be read as the harness being
+sloppy. Each of those false positives was a place where the checker knew
+something the log had stopped promising, which is the same failure the log's own
+comments have shown twice: an argument that was true when written and stopped
+being true somewhere else.
