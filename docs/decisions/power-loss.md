@@ -110,14 +110,62 @@ injected at all**:
 That second one had been reachable since compaction landed. It took a real power
 cut to motivate the mode sweep that exposed it.
 
+### The first fix was the wrong shape, and the second cut said so
+
+Twenty cuts passed after the fix above. Then one failed:
+
+```
+durable record 22066 was lost: sealed segment ...22066.log is damaged:
+at byte 53126: length field is 0, below the 28 byte header
+```
+
+Recovery leans on "sealed" twice — it scans only the active segment, and it
+refuses a sealed segment with a damaged tail rather than truncating one — and
+both lean on the same premise: nothing has appended to a sealed segment since it
+was sealed **and synced**. Recording the sync as a debt for the next `Sync` to
+pay broke that premise. A machine that stops between the roll and that `Sync`
+leaves a sealed segment holding acknowledged records and an unsynced tail, and
+refusing the file takes the acknowledged prefix with it.
+
+The invariant is now restored rather than tracked: **rolling syncs the outgoing
+segment in every mode**, `os` included. It still never syncs on its own between
+rolls, and it pays one fsync per segment — the same bargain the directory sync
+made for the same reason. The debt list and the compaction bookkeeping it needed
+are both gone, and with them the class of bug that `seeds/0068.md` recorded.
+
+### Why simulation could not have found it either
+
+This is the part worth keeping. A crashed file in `sim.FS` reverted to its
+synced bytes, so a sealed segment came back *short and clean* — no damaged tail,
+nothing for recovery to refuse. Real ext4 journals metadata separately from
+data, so the file came back **longer than its contents, with zeros in the gap**,
+and a zero length field is a corrupt record rather than a missing one.
+
+The simulator was not wrong about fsync. It was optimistic about crashes in a
+way no fault in the catalogue could express, and it had been for four
+milestones. `sim.FS.CrashExtend` models the other case now, and the regression
+test for this bug uses it: against the old behaviour it fails with the same
+error ext4 produced.
+
+That is the second time this exercise has found a gap in the *model* rather than
+in the log, and both times the gap was invisible from inside the simulation.
+
 ## Where It Stands Now
 
-- **20 of 20 cuts lose nothing acknowledged as durable**, with segments rolling
+- **Every cut loses nothing acknowledged as durable**, with segments rolling
   throughout — up to 186 segments in a run — so the cut lands during appends,
   syncs, segment creations, and directory syncs.
-- The control still fails, so the cut still has teeth.
-- 1,000 sweep seeds across all three durability modes, no failures.
+- The control still fails, so the cut still has teeth. It had to be strengthened
+  to keep them: once rolling syncs in every mode, a writer that never calls
+  `Sync` is still flushed by its rolls, so the control now uses one segment
+  large enough that nothing rolls and nothing is synced at all. A control that
+  passes is a test that has stopped testing.
+- 500 sweep seeds across three durability modes and 207 distinct shapes, no
+  failures.
 - 8 corpus seeds, no drift.
+- `task ci` runs five cuts, and `task ci:nightly` runs fifty. The script fails
+  loudly on a host that cannot give it a privileged container rather than
+  skipping, because a skip leaves the claim looking checked.
 
 ## What This Still Does Not Prove
 
@@ -154,14 +202,26 @@ can cut power between two writes.
 
 Two, and both are about coverage rather than correctness.
 
-**The workload is still one shape.** Every seed drives the same rhythm of
-appends, syncs, commits, compactions, and snapshots. The durability axis was one
-point wide for two milestones and cost two bugs; there is no reason to believe
-it was the only such axis. Record sizes, batch sizes, segment sizes, and index
-intervals are all fixed in the harness, and each is a dimension where the same
-mistake could be hiding.
+Both of the risks this note first named have been addressed, and the answer to
+one of them is more interesting than the other.
 
-**The power-cut test is not in CI.** It needs a privileged container, so it runs
-when someone runs it. A durability guarantee that is only checked by hand is one
-that decays quietly, which is the same failure mode the corpus's drift detector
-exists to catch.
+**The shape is no longer fixed.** Segment size, index interval, payload size,
+batch size, and the batch-mode sync interval are drawn from the seed and
+recorded in seed front matter, defaulting to the old constants so the corpus
+kept its meaning. A sweep now reports how many distinct shapes and modes it
+used, and a test asserts it varies them — because an axis that quietly stops
+varying reports the same clean result as one that never did.
+
+Widening it found nothing. 500 seeds across 207 shapes, no failures. That is a
+weaker result than the durability axis produced and is worth recording as one:
+the axis that mattered was found by a real disk, not by widening the simulation.
+
+**The power cut runs in CI.** Five cuts in `task ci`, fifty in `ci:nightly`.
+
+What is left is the same gap in a narrower form. The simulator has now been
+wrong twice about what a crash leaves behind — once about directory entries,
+once about file length — and both times a real filesystem was needed to notice.
+The next assumption worth doubting is that `CrashExtend` and `Crash` are the
+only two shapes a real crash takes. A cut landing inside a page write, a
+filesystem other than ext4, and a drive that reorders writes are all still
+outside what either the model or this test can produce.

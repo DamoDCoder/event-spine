@@ -60,8 +60,14 @@ grouped under `Unreleased`.
 - `scripts/powercut.sh` and `task verify:powercut`: cut the power under a real
   kernel, real ext4, and a real block device, with a control round that must
   fail. The result is in `docs/decisions/power-loss.md`.
-- The simulation harness varies the log's durability mode, recorded in seed front
-  matter and defaulting to batch so existing seeds keep their meaning.
+- The simulation harness varies the log's durability mode and its shape — segment
+  size, index interval, payload size, batch size, sync interval — recorded in
+  seed front matter and defaulting to the old constants so existing seeds keep
+  their meaning. Sweeps report how many modes and shapes they used, and a test
+  asserts they vary.
+- `sim.FS.CrashExtend`: the power cut that leaves a file longer than its
+  contents, with zeros in the gap. Real ext4 does this and the simulator could
+  not, which is why a bug that needed it went unfound for four milestones.
 - `spine replay`: scrub a seed step by step, inspect one step in full, list the
   filesystem operations with the faults that fired on them, or diff a failing
   run against the same seed with no faults. The M4 result is in
@@ -76,6 +82,11 @@ grouped under `Unreleased`.
   with records on both sides of it. Found by `task verify:powercut` against real
   ext4, not by simulation — the workload had run only in batch mode, where a
   roll syncs the outgoing segment and the gap cannot open.
+- A sealed segment could hold acknowledged records and an unsynced tail, and
+  recovery refuses such a segment outright — so the acknowledged prefix went
+  with it. Rolling now syncs the outgoing segment in every mode, restoring the
+  premise recovery leans on, and the list of syncs owed is gone. Found by the
+  second power cut, after the first fix for this area had passed twenty.
 - A segment closed by compaction stayed on the list of syncs owed, so the next
   `Sync` tried to flush a file that no longer existed. `seeds/0068.md`, found
   with no fault injected at all once durability modes entered the sweep.
