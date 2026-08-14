@@ -79,9 +79,9 @@ from the protection:
 > recovery pass goes looking for. OS mode is the exception it claims to be.
 
 The mode promises not to sync *on its own*. It does not promise that an explicit
-`Sync` is a lie. It now records what it owes and `Sync` pays it, oldest first, so
-a machine that stops partway leaves a durable prefix rather than a durable suffix
-with a gap in front of it.
+`Sync` is a lie. The first fix had `os` mode record what it owed for the next
+`Sync` to pay, oldest first — which passed twenty cuts and was still wrong, for
+a reason the next section gets to.
 
 ### Why simulation had not found it
 
