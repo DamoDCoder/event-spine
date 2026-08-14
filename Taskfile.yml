@@ -64,9 +64,15 @@ tasks:
       - go test -run '^$' -bench=BenchmarkLog -benchmem -benchtime=1s -count=6 -timeout=30m ./internal/log | tee bench/log.txt
 
   bench:compare:
-    desc: Owned log versus Kafka on an identical workload (M5)
+    desc: Owned log versus Kafka on an identical workload (M5), both in containers
+    # Both systems run in containers on one machine, which the protocol in
+    # docs/decisions/m5-comparison-protocol.md requires: a host-native spine
+    # against a containerised Kafka would be comparing the hypervisor.
+    vars:
+      RECORDS: '{{.RECORDS | default "50000"}}'
+      SIZES: '{{.SIZES | default "64,1024"}}'
     cmds:
-      - go run ./cmd/spine bench compare | tee bench/compare.txt
+      - RECORDS={{.RECORDS}} SIZES={{.SIZES}} ./scripts/bench-compare.sh | tee bench/compare.txt
 
   # -------------------------------------------------------------- simulation
 
