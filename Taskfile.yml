@@ -84,8 +84,9 @@ tasks:
       STEPS: '{{.STEPS | default "0"}}'
       FAULTS: '{{.FAULTS | default ""}}'
       DURABILITY: '{{.DURABILITY | default ""}}'
+      SHAPE: '{{.SHAPE | default ""}}'
     cmds:
-      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}" --durability "{{.DURABILITY}}"
+      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}" --durability "{{.DURABILITY}}" --shape "{{.SHAPE}}"
 
   sim:corpus:
     desc: Replay every seed in the regression corpus
@@ -142,6 +143,19 @@ tasks:
       - task: test:container
       - task: verify:determinism:container
       - task: sim:corpus
+      # The durability claim is checked here rather than by hand. It needs a
+      # privileged container and fails loudly on a host that cannot give it
+      # one, because a skip would leave the claim looking checked.
+      - task: verify:powercut
+        vars: { CUTS: 5 }
+
+  ci:nightly:
+    desc: The long runs, over seeds and cuts no committed run has used.
+    cmds:
+      - task: ci
+      - task: sim:nightly
+      - task: verify:powercut
+        vars: { CUTS: 50 }
 
   reset:
     desc: Remove build artifacts and local log data

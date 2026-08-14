@@ -221,6 +221,58 @@ func TestSyncCoversSealedSegmentsInOSMode(t *testing.T) {
 	}
 }
 
+// A sealed segment must be durable the moment it is sealed.
+//
+// Recovery refuses a sealed segment with a damaged tail outright, on the premise
+// that "nothing has appended to it since it was sealed and synced". Deferring
+// that sync in os mode broke the premise: a crash between the roll and the next
+// Sync leaves a sealed segment holding acknowledged records and an unsynced
+// tail, and refusing the file takes the acknowledged prefix with it.
+//
+// Found by scripts/powercut.sh, on a run where the previous fix for this same
+// area had already passed twenty cuts.
+func TestASealedSegmentIsDurableWhenItIsSealed(t *testing.T) {
+	fs := sim.NewFS()
+	cfg := Config{Segment: Options{MaxBytes: 512}, Durability: OS}
+
+	l, _, err := Open(fs, cfg)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Acknowledged: everything to here is durable.
+	appendN(t, l, 0, 40)
+	if err := l.Sync(); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if err := fs.Sync(); err != nil {
+		t.Fatalf("FS.Sync: %v", err)
+	}
+	acked := int(l.Next())
+
+	// More records, crossing a roll, and no Sync after it. The machine dies
+	// with a sealed segment whose tail never reached the disk.
+	appendN(t, l, acked, 200)
+	if len(l.Segments()) < 3 {
+		t.Fatalf("the log rolled %d times, which is not enough to seal one", len(l.Segments())-1)
+	}
+	// The cut that leaves the file longer than its contents, which is what
+	// ext4 did and what the simulator could not produce until now.
+	fs.CrashExtend()
+
+	reopened, _, err := Open(fs, cfg)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+
+	for i := range acked {
+		if _, err := reopened.Read(Offset(i)); err != nil {
+			t.Fatalf("record %d was acknowledged durable and is unreadable: %v", i, err)
+		}
+	}
+}
+
 // A duration with no clock to measure it against would silently never fire.
 func TestAnIntervalWithoutAClockIsRejected(t *testing.T) {
 	_, _, err := Open(sim.NewFS(), Config{SyncInterval: 100})

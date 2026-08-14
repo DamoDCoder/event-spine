@@ -19,6 +19,10 @@ func TestAReplayDoesNotDisturbTheRunItRecords(t *testing.T) {
 		{Seed: 17, Faults: []Fault{{Kind: Crash, At: 62}}},
 		{Seed: 72, Steps: 29, Faults: []Fault{{Kind: SyncError, At: 41}}},
 		{Seed: 1889, Steps: 32, Faults: []Fault{{Kind: SyncError, At: 53}}},
+
+		// A shape that is not the default, since the whole point of the
+		// shape being configurable is that runs stop looking alike.
+		{Seed: 5, Steps: 20, Shape: Shape{SegmentBytes: 512, MaxPayload: 2000, MaxBatch: 32}},
 	}
 
 	for _, cfg := range configs {
@@ -26,7 +30,7 @@ func TestAReplayDoesNotDisturbTheRunItRecords(t *testing.T) {
 		w, err := runWorkload(quiet, cfg)
 		quietFailure := err
 		if err == nil || isInjected(err) || (w.corrupted && isDamage(err)) {
-			quietFailure = check(quiet, w)
+			quietFailure = check(quiet, w, cfg.Shape.withDefaults())
 		}
 
 		trace := Replay(cfg)

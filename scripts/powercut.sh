@@ -30,7 +30,20 @@ CUTS=${CUTS:-10}
 DISK_MB=${DISK_MB:-256}
 IMAGE=${IMAGE:-event-spine:powercut}
 
+# A guarantee that is only checked when someone remembers is one that decays,
+# so this runs in `task ci` and refuses rather than skips when it cannot. A
+# silent skip would leave the durability claim looking checked while nothing
+# checks it, which is the failure mode the corpus's drift detector exists for.
 if [ "${INSIDE_CONTAINER:-}" != "1" ]; then
+    if ! docker run --rm --privileged "$IMAGE" true >/dev/null 2>&1 &&
+       ! docker run --rm --privileged alpine:3.20 true >/dev/null 2>&1; then
+        echo "powercut: this host cannot run a privileged container." >&2
+        echo "The power-loss test needs loop devices and mount, which need" >&2
+        echo "CAP_SYS_ADMIN. Run it somewhere that can before publishing any" >&2
+        echo "durability claim — see docs/decisions/power-loss.md." >&2
+        exit 1
+    fi
+
     # The outer half: build the binary and re-enter privileged, because loop
     # devices and mounting need capabilities a normal container does not have.
     docker build -q --target build -t "$IMAGE" . >/dev/null
@@ -105,7 +118,11 @@ LOOP=$(losetup --find --show --direct-io=on /cut/disk.img)
 mkfs.ext4 -q -F "$LOOP"
 mount "$LOOP" /mnt/disk
 
-"$SPINE" powercut write --dir /mnt/disk --acked /cut/acked --never-sync &
+# One segment large enough that the run never rolls. Rolling syncs the
+# outgoing segment in every mode — that is the invariant the second power-cut
+# failure restored — so a rolling control would be flushed by the rolls and
+# would survive the cut, reporting teeth the test does not have.
+"$SPINE" powercut write --dir /mnt/disk --acked /cut/acked --never-sync --segment-bytes $((64 << 20)) &
 writer=$!
 sleep 0.4
 kill -9 "$writer" 2>/dev/null || true
@@ -118,7 +135,7 @@ losetup -d "$LOOP"
 SNAP=$(losetup --find --show /cut/snapshot.img)
 mount "$SNAP" /mnt/snapshot
 printf 'control: '
-if "$SPINE" powercut verify --dir /mnt/snapshot --acked /cut/acked; then
+if "$SPINE" powercut verify --dir /mnt/snapshot --acked /cut/acked --segment-bytes $((64 << 20)); then
     umount -l /mnt/snapshot
     losetup -d "$SNAP"
     echo

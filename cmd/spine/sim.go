@@ -87,8 +87,8 @@ func simSweep(args []string) error {
 	report := harness.Sweep(*from, *count, *minimize)
 
 	for _, f := range report.Failures {
-		fmt.Printf("FAIL seed %d steps %d %s faults %s\n     %v\n",
-			f.Config.Seed, f.Config.Steps, durabilityName(f.Config),
+		fmt.Printf("FAIL seed %d steps %d %s [%s] faults %s\n     %v\n",
+			f.Config.Seed, f.Config.Steps, durabilityName(f.Config), f.Config.Shape,
 			harness.FormatFaults(f.Config.Faults), f.Err)
 		if *out == "" {
 			continue
@@ -102,6 +102,8 @@ func simSweep(args []string) error {
 
 	fmt.Printf("\nsweep: %d seeds, %d failures\n", report.Runs, len(report.Failures))
 	fmt.Printf("injected: %s\n", formatCoverage(report.Faults))
+	fmt.Printf("modes: %s\n", formatCounts(report.Modes))
+	fmt.Printf("shapes: %d distinct\n", len(report.Shapes))
 	fmt.Printf("exercised: %d compactions dropping %d records, %d snapshots (sampled)\n",
 		report.Compactions, report.Dropped, report.Snapshots)
 
@@ -117,6 +119,22 @@ func formatCoverage(faults map[harness.Kind]int) string {
 	parts := make([]string, 0, len(harness.Kinds))
 	for _, kind := range harness.Kinds {
 		parts = append(parts, fmt.Sprintf("%s %d", kind, faults[kind]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// formatCounts renders a histogram in a fixed order, because a map ranged
+// straight into output would report a different line every run.
+func formatCounts(counts map[string]int) string {
+	names := make([]string, 0, len(counts))
+	for name := range counts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		parts = append(parts, fmt.Sprintf("%s %d", name, counts[name]))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -187,6 +205,7 @@ func repro(args []string) error {
 		faults = fs.String("faults", "", "faults to inject, as kind@position[:arg], space separated")
 		point  = fs.Int("point", 0, "shorthand for --faults crash@N")
 		mode   = fs.String("durability", "", "log durability mode: batch, sync, or os")
+		shape  = fs.String("shape", "", "run shape, as seg=N index=N payload=N batch=N syncrecords=N")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -205,7 +224,17 @@ func repro(args []string) error {
 		if err != nil {
 			return err
 		}
-		cfg := harness.Config{Seed: *seed, Steps: *steps, Faults: parsed, Durability: *mode}
+		parsedShape, err := harness.ParseShape(*shape)
+		if err != nil {
+			return err
+		}
+		cfg := harness.Config{
+			Seed:       *seed,
+			Steps:      *steps,
+			Faults:     parsed,
+			Durability: *mode,
+			Shape:      parsedShape,
+		}
 		if err := harness.Run(cfg); err != nil {
 			return fmt.Errorf("seed %d %s reproduces: %w", *seed, harness.FormatFaults(parsed), err)
 		}
@@ -263,6 +292,7 @@ func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
 seed: %d
 steps: %d
 durability: %s
+shape: %s
 ops: %d
 signature: %016x
 faults: %s
@@ -283,7 +313,7 @@ read yet.
 task repro SEED=%d FAULTS="%s"
 `+"```"+`
 `,
-		f.Config.Seed, f.Config.Steps, durabilityName(f.Config), ops, signature,
+		f.Config.Seed, f.Config.Steps, durabilityName(f.Config), f.Config.Shape, ops, signature,
 		harness.FormatFaults(f.Config.Faults), f.Err,
 		f.Config.Seed, harness.FormatFaults(f.Config.Faults))
 
@@ -368,6 +398,13 @@ func parseCorpusEntry(file, body string) (corpusEntry, error) {
 				return entry, fmt.Errorf("corpus: %s: ops %q is not a number", file, value)
 			}
 			entry.ops = n
+
+		case "shape":
+			shape, err := harness.ParseShape(value)
+			if err != nil {
+				return entry, fmt.Errorf("corpus: %s: %w", file, err)
+			}
+			entry.cfg.Shape = shape
 
 		case "durability":
 			switch value {

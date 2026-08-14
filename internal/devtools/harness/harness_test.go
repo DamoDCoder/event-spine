@@ -75,3 +75,25 @@ func TestTheCrashPointActuallyCrashes(t *testing.T) {
 		t.Fatalf("the crash landed after %d operations, want 3", fs.Ops())
 	}
 }
+
+// A sweep that stopped varying its configuration would report the same clean
+// result as one that explored everything. The durability mode was pinned for
+// two milestones and cost two bugs, so the axes are asserted rather than
+// assumed.
+func TestASweepVariesItsConfiguration(t *testing.T) {
+	report := Sweep(1, 60, false)
+
+	if len(report.Modes) < 3 {
+		t.Errorf("60 seeds used %d durability modes, want all three: %v", len(report.Modes), report.Modes)
+	}
+	if len(report.Shapes) < 10 {
+		t.Errorf("60 seeds used %d distinct shapes, which is not a swarm", len(report.Shapes))
+	}
+
+	// Every mode has to appear often enough to be more than an accident.
+	for _, mode := range []string{"batch", "sync", "os"} {
+		if report.Modes[mode] < 3 {
+			t.Errorf("mode %s ran %d times in 60 seeds", mode, report.Modes[mode])
+		}
+	}
+}

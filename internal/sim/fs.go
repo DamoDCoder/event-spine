@@ -126,6 +126,34 @@ func (f *FS) Sync() error {
 	return nil
 }
 
+// CrashExtend is a power cut where a file's length outlived its contents.
+//
+// ext4 journals metadata and writes data separately, so a crash can leave a
+// file *longer* than the bytes that reached the disk, with the gap reading back
+// as zeros. Crash models the other case — the file reverts to what was synced —
+// and for four milestones that was the only case the simulator could produce.
+//
+// scripts/powercut.sh found the difference the hard way. A sealed segment
+// carrying acknowledged records and an unsynced tail came back from real ext4
+// as a file with a hole of zeros in the middle, which recovery refused; the
+// simulation of the same run passed, because its crash had shortened the file
+// instead of zero-filling it and there was no damaged tail to refuse.
+//
+// A zero byte is not a valid record length, so this lands squarely on the
+// framing checks rather than sneaking past them.
+func (f *FS) CrashExtend() {
+	live := make(map[string]*inode, len(f.durable))
+	for name, n := range f.durable {
+		grown := append([]byte(nil), n.durable...)
+		if extra := len(n.data) - len(n.durable); extra > 0 {
+			grown = append(grown, make([]byte, extra)...)
+		}
+		n.data = grown
+		live[name] = n
+	}
+	f.live = live
+}
+
 // Overwrite replaces bytes already on the disk, which no caller of core.FS can
 // do.
 //
@@ -197,6 +225,9 @@ func (f *FS) Clone() *FS {
 // Files whose directory entry was never synced disappear entirely. Files whose
 // entry was synced come back holding only the bytes that were synced, which is
 // the torn tail recovery exists to truncate.
+//
+// This is the optimistic half of what a real filesystem does. See CrashExtend
+// for the other half, and for what it cost to learn the difference.
 func (f *FS) Crash() {
 	live := make(map[string]*inode, len(f.durable))
 	for name, n := range f.durable {

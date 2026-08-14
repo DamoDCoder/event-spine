@@ -120,6 +120,10 @@ type Config struct {
 	// the outgoing segment, so the gap it opened in os mode could not
 	// appear here.
 	Durability string
+
+	// Shape is how big the run's records, batches, and segments are. A zero
+	// shape is the one every seed used before it was configurable.
+	Shape Shape
 }
 
 // FormatFaults renders a fault list as the corpus stores it.

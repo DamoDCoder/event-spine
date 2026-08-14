@@ -100,10 +100,11 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 	// Segments small enough that a forty step run rolls several times, and
 	// a batch sync interval that leaves unsynced records lying around for a
 	// crash to take.
+	shape := cfg.Shape.withDefaults()
 	logCfg := log.Config{
-		Segment:     log.Options{MaxBytes: 4 << 10, IndexInterval: 256},
+		Segment:     log.Options{MaxBytes: shape.SegmentBytes, IndexInterval: shape.IndexInterval},
 		Durability:  durabilityOf(cfg),
-		SyncRecords: 16,
+		SyncRecords: shape.SyncRecords,
 		Clock:       clock,
 	}
 
@@ -152,7 +153,7 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 			fs.record(f)
 		}
 
-		err := w.act(l, src, step)
+		err := w.act(l, src, step, shape)
 
 		// A bit flip that fired weakens what the checks may demand: a
 		// record whose bytes were corrupted on the platter may be
@@ -187,12 +188,12 @@ func durabilityOf(cfg Config) log.Durability {
 }
 
 // act performs one workload action, chosen by the seed.
-func (w *witness) act(l *log.Log, src *sim.Source, step int) error {
+func (w *witness) act(l *log.Log, src *sim.Source, step int, shape Shape) error {
 	switch src.Intn(10) {
 	case 0, 1, 2, 3, 4, 5:
-		batch := make([]core.Event, 1+src.Intn(4))
+		batch := make([]core.Event, 1+src.Intn(shape.MaxBatch))
 		for i := range batch {
-			batch[i] = workloadEvent(src, step)
+			batch[i] = workloadEvent(src, step, shape)
 		}
 		if size := encodedSize(batch); size > w.largestWrite {
 			w.largestWrite = size
@@ -355,8 +356,8 @@ func checkLive(l *log.Log, w *witness) error {
 
 // workloadEvent builds an event whose size varies, so records cross write
 // boundaries at different places.
-func workloadEvent(src *sim.Source, step int) core.Event {
-	payload := make([]byte, src.Intn(200))
+func workloadEvent(src *sim.Source, step int, shape Shape) core.Event {
+	payload := make([]byte, src.Intn(shape.MaxPayload))
 	for i := range payload {
 		payload[i] = byte(src.Intn(256))
 	}

@@ -16,8 +16,11 @@ import (
 // its key survives; a bit flip licenses a record being unreadable but never a
 // record coming back wrong. A checker that loosened by default would agree with
 // any log at all.
-func check(fs *FS, w *witness) error {
-	logCfg := log.Config{Segment: log.Options{MaxBytes: 4 << 10, IndexInterval: 256}}
+func check(fs *FS, w *witness, shape Shape) error {
+	logCfg := log.Config{Segment: log.Options{
+		MaxBytes:      shape.SegmentBytes,
+		IndexInterval: shape.IndexInterval,
+	}}
 
 	l, rec, err := log.Open(fs.recovered(), logCfg)
 	if err != nil {

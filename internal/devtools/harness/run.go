@@ -18,7 +18,7 @@ func Run(cfg Config) error {
 	if err != nil && !isInjected(err) && !(w.corrupted && isDamage(err)) {
 		return err
 	}
-	return check(fs, w)
+	return check(fs, w, cfg.Shape.withDefaults())
 }
 
 // CleanOps returns how many filesystem operations the configuration's workload
@@ -35,7 +35,12 @@ func Run(cfg Config) error {
 // produces and what a count would call unchanged.
 func CleanOps(cfg Config) (int, uint64, error) {
 	fs := NewFS(nil)
-	if _, err := runWorkload(fs, Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability}); err != nil {
+	if _, err := runWorkload(fs, Config{
+		Seed:       cfg.Seed,
+		Steps:      cfg.Steps,
+		Durability: cfg.Durability,
+		Shape:      cfg.Shape,
+	}); err != nil {
 		return 0, 0, err
 	}
 	return fs.Ops(), fs.Signature(), nil
@@ -71,6 +76,13 @@ type Report struct {
 	Dropped     int
 	Snapshots   int
 	Faults      map[Kind]int
+
+	// Modes and Shapes count how many runs used each, because an axis that
+	// stopped varying is exactly the mistake that cost two bugs: a sweep
+	// pinned to one shape reports the same clean result as a sweep across
+	// all of them.
+	Modes  map[string]int
+	Shapes map[string]int
 }
 
 // Failure is one configuration that broke an invariant.
@@ -90,7 +102,7 @@ func Matrix(seed int64, maxPoints int) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("harness: the clean run failed: %w", err)
 	}
-	if err := check(clean, w); err != nil {
+	if err := check(clean, w, Shape{}.withDefaults()); err != nil {
 		return Report{}, fmt.Errorf("harness: the clean run broke an invariant: %w", err)
 	}
 
@@ -130,7 +142,11 @@ func Matrix(seed int64, maxPoints int) (Report, error) {
 // average run — docs/simulation-testing.md says so, and this is what it means
 // in code.
 func Sweep(from int64, count int, minimize bool) Report {
-	report := Report{Faults: map[Kind]int{}}
+	report := Report{
+		Faults: map[Kind]int{},
+		Modes:  map[string]int{},
+		Shapes: map[string]int{},
+	}
 
 	for i := range count {
 		seed := from + int64(i)
@@ -140,13 +156,24 @@ func Sweep(from int64, count int, minimize bool) Report {
 		for _, f := range cfg.Faults {
 			report.Faults[f.Kind]++
 		}
+		mode := cfg.Durability
+		if mode == "" {
+			mode = "batch"
+		}
+		report.Modes[mode]++
+		report.Shapes[cfg.Shape.String()]++
 
 		// The coverage counters come from a clean run of the same seed,
 		// since a faulted run stops early and would undercount what the
 		// workload is capable of doing.
 		if i%16 == 0 {
 			clean := NewFS(nil)
-			if w, err := runWorkload(clean, Config{Seed: seed, Steps: cfg.Steps, Durability: cfg.Durability}); err == nil {
+			if w, err := runWorkload(clean, Config{
+				Seed:       seed,
+				Steps:      cfg.Steps,
+				Durability: cfg.Durability,
+				Shape:      cfg.Shape,
+			}); err == nil {
 				report.Compactions += w.compactions
 				report.Dropped += w.dropped
 				report.Snapshots += w.snapshots
@@ -188,8 +215,17 @@ func swarm(seed int64) Config {
 		cfg.Durability = "sync"
 	}
 
+	// The rest of the run's size comes from the seed too, for the same
+	// reason: a constant is an axis nobody is looking along.
+	cfg.Shape = shapeFor(src)
+
 	probe := NewFS(nil)
-	if _, err := runWorkload(probe, Config{Seed: seed, Steps: cfg.Steps, Durability: cfg.Durability}); err != nil {
+	if _, err := runWorkload(probe, Config{
+		Seed:       seed,
+		Steps:      cfg.Steps,
+		Durability: cfg.Durability,
+		Shape:      cfg.Shape,
+	}); err != nil {
 		return cfg
 	}
 	ops := probe.Ops()
@@ -254,7 +290,7 @@ func Minimize(cfg Config, failure error) (Config, error) {
 	for changed {
 		changed = false
 		for i := range cfg.Faults {
-			shorter := Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability}
+			shorter := Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability, Shape: cfg.Shape}
 			shorter.Faults = append(shorter.Faults, cfg.Faults[:i]...)
 			shorter.Faults = append(shorter.Faults, cfg.Faults[i+1:]...)
 
@@ -274,7 +310,13 @@ func Minimize(cfg Config, failure error) (Config, error) {
 		steps = DefaultSteps
 	}
 	for span := steps / 2; span >= 1; span /= 2 {
-		shorter := Config{Seed: cfg.Seed, Steps: steps - span, Faults: cfg.Faults, Durability: cfg.Durability}
+		shorter := Config{
+			Seed:       cfg.Seed,
+			Steps:      steps - span,
+			Faults:     cfg.Faults,
+			Durability: cfg.Durability,
+			Shape:      cfg.Shape,
+		}
 		if shorter.Steps > 0 && reproduces(shorter) {
 			steps = shorter.Steps
 		}

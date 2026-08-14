@@ -69,7 +69,7 @@ func Replay(cfg Config) Trace {
 
 	trace := Trace{Config: cfg}
 	w, err := observeWorkload(fs, cfg, func(l *log.Log, step int) {
-		trace.States = append(trace.States, snapshotState(fs, step))
+		trace.States = append(trace.States, snapshotState(fs, step, cfg.Shape.withDefaults()))
 	})
 
 	trace.Ops = fs.Trace()
@@ -81,7 +81,7 @@ func Replay(cfg Config) Trace {
 		trace.Failure = err
 		return trace
 	}
-	trace.Failure = check(fs, w)
+	trace.Failure = check(fs, w, cfg.Shape.withDefaults())
 	return trace
 }
 
@@ -93,14 +93,17 @@ func Replay(cfg Config) Trace {
 // than what the running process believes. A record appended and not yet synced
 // is on the disk and shows up here; a torn tail is truncated here exactly as
 // recovery would truncate it.
-func snapshotState(fs *FS, step int) State {
+func snapshotState(fs *FS, step int, shape Shape) State {
 	state := State{
 		Step:     step,
 		Snapshot: -1,
 		Groups:   map[string]log.Offset{},
 	}
 
-	l, _, err := log.Open(fs.Copy(), log.Config{Segment: log.Options{MaxBytes: 4 << 10, IndexInterval: 256}})
+	l, _, err := log.Open(fs.Copy(), log.Config{Segment: log.Options{
+		MaxBytes:      shape.SegmentBytes,
+		IndexInterval: shape.IndexInterval,
+	}})
 	if err != nil {
 		state.Err = err
 		return state
@@ -238,7 +241,7 @@ func sameState(a, b State) bool {
 // Without returns the configuration with its faults removed, which is the run a
 // failing seed is compared against.
 func Without(cfg Config) Config {
-	return Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability}
+	return Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability, Shape: cfg.Shape}
 }
 
 // FormatState renders a state as one line of a scrub.

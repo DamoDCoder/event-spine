@@ -105,16 +105,6 @@ type Log struct {
 	// commits is the consumer groups' offsets log, opened on the first
 	// mention of a group. A log nobody consumes creates no file to say so.
 	commits *commits
-
-	// unsynced holds segments sealed without being synced, which only
-	// happens in os mode. Sync owes them a flush: "everything appended so
-	// far is durable" has to include records that a roll moved out of the
-	// active segment, or the promise is one a crash can turn into a hole.
-	//
-	// A segment leaves this list when it is synced or when compaction
-	// replaces it, and forget is the only way out. Holding a handle
-	// compaction has closed is seeds/0068.md.
-	unsynced []*Segment
 }
 
 // Open opens or creates a log in the directory the filesystem is rooted at.
@@ -253,27 +243,25 @@ func (l *Log) createSegment(base Offset) (*Segment, error) {
 
 // roll seals the active segment and starts a new one at the next offset.
 //
-// The old segment is synced before it is sealed, because recovery only scans
-// the active segment: a sealed segment holding writes that never reached the
-// disk is a hole no recovery pass goes looking for.
+// The outgoing segment is synced first, in every durability mode including os.
+// "Sealed" has to mean "durable", because recovery leans on it twice: it scans
+// only the active segment, and it refuses a sealed segment with a damaged tail
+// outright rather than truncating one.
 //
-// OS mode used to be exempt, on the reasoning that a mode asking for no syncs
-// gains nothing from one while the page cache still holds everything else. That
-// was wrong in a way scripts/powercut.sh found against real ext4. The mode
-// promises not to sync *on its own*; it does not promise that an explicit Sync
-// is a lie. Skipping the sync here left the sealed segment unsynced, Sync only
-// ever covers the active one, and a cut then opened a gap in the middle of the
-// log — offsets 576 onward present, the segment before them empty.
+// Two power cuts were needed to arrive at that sentence. os mode was exempt at
+// first, on the reasoning that a mode asking for no syncs gains nothing from
+// one, and a cut opened a hole in the middle of a log. The fix after that had
+// os mode record the debt for the next Sync to pay, which passed twenty cuts
+// and then failed: a machine that stops between the roll and that Sync leaves a
+// sealed segment holding acknowledged records and an unsynced tail, and
+// refusing the file takes the acknowledged prefix with it.
 //
-// So os mode now records what it owes instead, and Sync pays it. Rolling itself
-// still forces nothing.
+// So the invariant is restored rather than tracked. os mode still never syncs
+// on its own between rolls; it pays one fsync per segment, which is the same
+// bargain the directory sync already made for the same reason.
 func (l *Log) roll() error {
-	if l.cfg.Durability != OS {
-		if err := l.active.Sync(); err != nil {
-			return err
-		}
-	} else {
-		l.unsynced = append(l.unsynced, l.active)
+	if err := l.active.Sync(); err != nil {
+		return err
 	}
 	l.active.Seal()
 
@@ -317,19 +305,9 @@ func (l *Log) maybeSync() error {
 
 // Sync makes everything appended so far durable and resets the batch counters.
 //
-// Everything means everything, including records a roll has since moved into a
-// sealed segment. Syncing only the active segment is what left a hole in the
-// middle of a log under scripts/powercut.sh.
+// Only the active segment needs it: every sealed segment was synced by the roll
+// that sealed it, in every mode.
 func (l *Log) Sync() error {
-	// Oldest first, so a crash during this loop leaves a durable prefix
-	// rather than a durable suffix with a gap before it.
-	for _, sealed := range l.unsynced {
-		if err := sealed.Sync(); err != nil {
-			return err
-		}
-	}
-	l.unsynced = l.unsynced[:0]
-
 	if err := l.active.Sync(); err != nil {
 		return err
 	}
@@ -379,21 +357,6 @@ func (l *Log) segmentFor(off Offset) (*Segment, error) {
 	}
 	l.sealed[base] = s
 	return s, nil
-}
-
-// forget drops a segment from the list of syncs owed.
-//
-// Compaction calls it when it closes a segment it has replaced. The replacement
-// is already durable — compaction syncs the temporary file, renames it, and
-// syncs the directory — so the debt is paid rather than cancelled, and syncing
-// the closed handle would only fail.
-func (l *Log) forget(seg *Segment) {
-	for i, owed := range l.unsynced {
-		if owed == seg {
-			l.unsynced = append(l.unsynced[:i], l.unsynced[i+1:]...)
-			return
-		}
-	}
 }
 
 // baseAfter returns the base of the segment following the one that begins at
