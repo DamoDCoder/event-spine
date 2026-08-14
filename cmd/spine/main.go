@@ -35,6 +35,8 @@ func run(args []string) error {
 		return replay(args[1:])
 	case "bench":
 		return benchmark(args[1:])
+	case "powercut":
+		return powercut(args[1:])
 	case "-h", "--help", "help":
 		usage()
 		return nil
@@ -69,6 +71,9 @@ subcommands:
 
   bench compare [--broker host:port] [--records N] [--sizes 64,1024]
         Run one workload through the owned log and through Kafka.
+
+  powercut write|verify --dir DIR --acked FILE
+        The in-machine half of the power-loss test. See scripts/powercut.sh.
 
   help  Print this message.
 `)

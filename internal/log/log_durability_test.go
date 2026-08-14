@@ -173,6 +173,54 @@ func TestBatchDurabilityHonoursTheInjectedClock(t *testing.T) {
 	}
 }
 
+// Sync says it makes everything appended so far durable. After a roll in os
+// mode it did not: roll skips syncing the outgoing segment in that mode, and
+// Sync only ever touched the active one, so a crash left a hole in the middle
+// of the log where a sealed segment's records should have been.
+//
+// Found by scripts/powercut.sh against real ext4, which is the first thing to
+// exercise this: the simulation workload only ever ran in batch mode, where
+// roll syncs the outgoing segment and the gap cannot open.
+func TestSyncCoversSealedSegmentsInOSMode(t *testing.T) {
+	fs := sim.NewFS()
+
+	// Segments small enough that this rolls several times.
+	l, _, err := Open(fs, Config{Segment: Options{MaxBytes: 512}, Durability: OS})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	const n = 400
+	appendN(t, l, 0, n)
+	if len(l.Segments()) < 3 {
+		t.Fatalf("the log rolled %d times; the gap needs a sealed segment", len(l.Segments())-1)
+	}
+
+	// The caller is told everything so far is durable.
+	if err := l.Sync(); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if err := fs.Sync(); err != nil {
+		t.Fatalf("FS.Sync: %v", err)
+	}
+	fs.Crash()
+
+	reopened, _, err := Open(fs, Config{Segment: Options{MaxBytes: 512}, Durability: OS})
+	if err != nil {
+		t.Fatalf("reopen after the crash: %v", err)
+	}
+	defer reopened.Close()
+
+	if reopened.Next() < Offset(n) {
+		t.Fatalf("the log recovered to %d, below the %d acknowledged by Sync", reopened.Next(), n)
+	}
+	for i := range n {
+		if _, err := reopened.Read(Offset(i)); err != nil {
+			t.Fatalf("record %d was acknowledged durable and is gone: %v", i, err)
+		}
+	}
+}
+
 // A duration with no clock to measure it against would silently never fire.
 func TestAnIntervalWithoutAClockIsRejected(t *testing.T) {
 	_, _, err := Open(sim.NewFS(), Config{SyncInterval: 100})
