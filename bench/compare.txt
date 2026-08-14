@@ -1,0 +1,20 @@
+# spine against kafka, 50000 records per configuration, 256 per append call
+# 3 runs per configuration, median reported
+# sync rows hand over one record per call on both sides, so "fsync per record" is literal;
+# batch and os rows hand over 256. Rows compare backends, not modes.
+# protocol: docs/decisions/m5-comparison-protocol.md
+# the spine is in-process; kafka is a broker across a socket. See the protocol.
+
+backend mode    bytes  records/sec      ns/record     p50-ns     p99-ns     p999-ns      max-ns     read/sec
+spine   sync       64         2222         450007     330542    1817208     4270084    48937959      1007338
+kafka   sync       64         1650         606014     462542    2051334     5982917   257891875      1158746
+spine   batch      64      1679738            595      14584    1689458     1719292     1719292      1129930
+kafka   batch      64       423269           2363     246583   10301000    14135834    14135834      3822459
+spine   os         64     17525154             57      11333      47625       50375       50375      1110990
+kafka   os         64       744590           1343     226042    4357333    14537500    14537500      4199504
+spine   sync     1024         2002         499527     347542    1949834     3925625    44698041       677834
+kafka   sync     1024         1443         692809     500000    2255500     5922500    62442667       465969
+spine   batch    1024       597461           1674     127250    2543875     2673375     2673375       735643
+kafka   batch    1024       259823           3849     500209    9061542    15302333    15302333       755281
+spine   os       1024      2300918            435     104500     167167      315416      315416       744154
+kafka   os       1024       405840           2464     453584   13047750    16785417    16785417       640385

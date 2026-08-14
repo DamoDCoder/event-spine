@@ -44,6 +44,19 @@ spends 46 ns per record and `batch` mode spends 4.4 µs of amortised
 `F_FULLFSYNC` on top of it. A Linux number will differ and this repository does
 not have one yet.
 
+> **Addendum, 2026-08-14.** It has one now, and it changes the verdict's scope
+> rather than the verdict. M5 ran the same code in a Linux container and `batch`
+> mode reached **1,679,738 records/sec** at 64 bytes — above the 1M claim, in
+> the default durable mode, with no code change. The difference is the fsync:
+> `F_FULLFSYNC` on this Mac costs about ten times what the containerised Linux
+> filesystem charges, and that filesystem is a layer of virtualisation away from
+> a physical disk.
+>
+> So the M2 measurement stands for the machine it was taken on, and "the claim
+> does not hold" was a statement about darwin and `F_FULLFSYNC` rather than
+> about the log. Neither number is a claim about durability on real hardware,
+> which remains untested — see [m5-kafka-comparison.md](m5-kafka-comparison.md).
+
 ### Latency
 
 p99 is 3.8 µs in `os` and 6.9 µs in `batch`, both far inside the 2 ms budget.

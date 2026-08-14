@@ -49,6 +49,14 @@ grouped under `Unreleased`.
   `docs/decisions/m3-simulation-harness.md`.
 - `ops` and `signature` in seed front matter, and the `drifted` warning that
   reports when a stored seed no longer fires where it was recorded.
+- `internal/devtools/compare`, `spine bench compare`, and `task bench:compare`:
+  the same workload through the owned log and through Apache Kafka, both in
+  containers on one machine, with the protocol fixed in advance and the result
+  in `docs/decisions/m5-kafka-comparison.md`.
+- Two dependencies, the first in this repository: `franz-go` and its `kadm`
+  admin package, for speaking to Kafka. The reason is that Kafka's wire protocol
+  is not this project's internals — the owned log is — so implementing it by
+  hand would be effort spent on the part that is not the point.
 - `spine replay`: scrub a seed step by step, inspect one step in full, list the
   filesystem operations with the faults that fired on them, or diff a failing
   run against the same seed with no faults. The M4 result is in
@@ -265,6 +273,34 @@ M4, on 2026-08-13:
 - Seeds now carry a signature over the whole operation stream, not only its
   length. A stream reordered without changing length is drift a count calls
   unchanged.
+
+M5, on 2026-08-14:
+
+- The spine is faster than Kafka in every mode measured: 1.35x in `sync`, 4.0x
+  in `batch`, 23.5x in `os` at 64 byte records. Most of that is where the two
+  systems put their process boundary rather than a better log, and the
+  experiment cannot separate the two because the spine has no wire protocol.
+- The protocol written in advance caught its own error one layer down. The first
+  complete run reported a 3.2x win in `sync` mode, wrong in the spine's favour
+  by the batch size: the protocol paired the modes on "both fsync before
+  acknowledging every record", which was true of Kafka and not of the spine,
+  which decides durability once per `Append` call. Corrected to one record per
+  call, the same row reads 1.35x.
+- Two of four recorded predictions held. Kafka's sequential read advantage
+  vanishes at 1 KiB records rather than merely narrowing, and the spine's tail
+  latency is markedly *tighter* than Kafka's rather than looser — the prediction
+  that came out backwards is the result that most favours the spine.
+- Kafka costs 411 MB of image and 299 MB of resident memory for an idle broker,
+  against 10.7 MB and none. It buys replication, partitions, a wire protocol,
+  and an ecosystem, all of which were configured away to make the comparison
+  possible.
+- `Snapshot` has no Kafka equivalent, which is the first place the narrow `Log`
+  interface leaks: `log-design.md` claims Kafka can sit behind it without
+  distorting either side, and a compacted topic is a different mechanism rather
+  than an implementation of that one.
+- No durability claim was published, as the protocol said in advance. The
+  `sync` numbers describe a virtualised disk, and nothing here has met real
+  power loss.
 
 Carried over from the ideas cradle, where this project was designed:
 
