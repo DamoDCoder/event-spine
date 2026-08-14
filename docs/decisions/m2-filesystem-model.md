@@ -10,8 +10,11 @@ that the log synced segment files and never the directory naming them, which is
 a bug only a model that enforces rule 2 can see. A model written to agree with
 the implementation would have found nothing.
 
-The section on what is still only a belief has not changed. Nothing here has yet
-been tested against real power loss.
+The section on what is still only a belief **has now changed**: rules 1 and 2
+were validated against a real kernel on 2026-08-14, and finding the bug that
+validation exposed is recorded in [power-loss.md](power-loss.md). What remains
+untested is narrower — a physical drive's write cache, sector tearing, and
+controller reordering — and is described there.
 
 ## Why This Exists Before The Log
 

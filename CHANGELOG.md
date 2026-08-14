@@ -57,6 +57,11 @@ grouped under `Unreleased`.
   admin package, for speaking to Kafka. The reason is that Kafka's wire protocol
   is not this project's internals — the owned log is — so implementing it by
   hand would be effort spent on the part that is not the point.
+- `scripts/powercut.sh` and `task verify:powercut`: cut the power under a real
+  kernel, real ext4, and a real block device, with a control round that must
+  fail. The result is in `docs/decisions/power-loss.md`.
+- The simulation harness varies the log's durability mode, recorded in seed front
+  matter and defaulting to batch so existing seeds keep their meaning.
 - `spine replay`: scrub a seed step by step, inspect one step in full, list the
   filesystem operations with the faults that fired on them, or diff a failing
   run against the same seed with no faults. The M4 result is in
@@ -64,6 +69,20 @@ grouped under `Unreleased`.
   walkthrough in `docs/walkthrough-replay.md`.
 
 ### Fixed
+
+- `Log.Sync` said it made everything appended so far durable and did not: rolling
+  in `os` mode sealed the outgoing segment without syncing it, and `Sync` only
+  touched the active one, so a power cut left a hole in the middle of the log
+  with records on both sides of it. Found by `task verify:powercut` against real
+  ext4, not by simulation — the workload had run only in batch mode, where a
+  roll syncs the outgoing segment and the gap cannot open.
+- A segment closed by compaction stayed on the list of syncs owed, so the next
+  `Sync` tried to flush a file that no longer existed. `seeds/0068.md`, found
+  with no fault injected at all once durability modes entered the sweep.
+- `Reader.Next` dereferenced a nil cursor when every offset from the cursor to
+  the tail was missing, which a crash can produce by truncating one segment and
+  leaving the next one empty. A panic rather than an error, reachable since
+  compaction landed. `seeds/0290.md`.
 
 - A flipped bit in a record's offset field was accepted, putting the log's tail
   at 4611686018427387911 and assigning every later append an offset from there.
@@ -301,6 +320,19 @@ M5, on 2026-08-14:
 - No durability claim was published, as the protocol said in advance. The
   `sync` numbers describe a virtualised disk, and nothing here has met real
   power loss.
+
+Power loss, on 2026-08-14:
+
+- The trigger set in M2 has fired. A real kernel, real ext4, and a real block
+  device now agree with `sim.FS` about what an fsync buys, across 20 cuts with
+  segments rolling throughout, and a control round that claims durability
+  without syncing fails as it must.
+- It found a hole in the middle of a log on the first cut that could roll, and
+  the mode sweep it motivated found two more bugs, one of them a panic that had
+  been reachable since compaction landed.
+- What is still untested is narrower and stated: no physical drive, so no
+  write-cache loss, no sector tearing, and no controller reordering. This is
+  power loss below the filesystem, not below the disk.
 
 Carried over from the ideas cradle, where this project was designed:
 
