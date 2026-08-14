@@ -356,3 +356,126 @@ func recordsIn(l *Log, base Offset) ([]Record, error) {
 		out = append(out, rec)
 	}
 }
+
+// A reader with nothing left to read must say so rather than crash.
+//
+// A crash can truncate a segment's unsynced tail while the segment created after
+// it survives empty, because creating a segment syncs the directory and writing
+// to it does not. That leaves a hole running from the truncation point to the
+// tail. Reader.Next asks seek for the next surviving record, seek correctly
+// finds none, and Next then dereferenced the cursor's segment, which seek had
+// set to nil. A panic rather than an error, found by the sweep once os mode was
+// in the rotation: seeds/0290.md.
+func TestAReaderInAHoleRunningToTheTailStops(t *testing.T) {
+	fs := sim.NewFS()
+	cfg := Config{Segment: Options{MaxBytes: 512, IndexInterval: 64}, Durability: OS}
+
+	l, _, err := Open(fs, cfg)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Enough to roll, so a later segment exists, and synced early so the
+	// crash leaves the first segment holding records and the last holding
+	// none.
+	appendN(t, l, 0, 8)
+	if err := l.Sync(); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if err := fs.Sync(); err != nil {
+		t.Fatalf("FS.Sync: %v", err)
+	}
+	appendN(t, l, 8, 120)
+	if len(l.Segments()) < 2 {
+		t.Fatalf("the log did not roll: %d segment", len(l.Segments()))
+	}
+	fs.Crash()
+
+	reopened, _, err := Open(fs, cfg)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+
+	// The hole is everything between what survived and the tail.
+	r, err := reopened.Reader(reopened.First())
+	if err != nil {
+		t.Fatalf("Reader: %v", err)
+	}
+	for {
+		_, err := r.Next()
+		if errors.Is(err, ErrEndOfLog) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next at %d: %v", r.Offset(), err)
+		}
+	}
+
+	// And seeking directly into the hole, which is where a consumer holding
+	// an offset from before the crash lands.
+	if reopened.Next() > reopened.First() {
+		if err := r.Seek(reopened.Next() - 1); err != nil {
+			t.Fatalf("Seek into the hole: %v", err)
+		}
+		for {
+			_, err := r.Next()
+			if errors.Is(err, ErrEndOfLog) {
+				return
+			}
+			if err != nil {
+				t.Fatalf("Next after seeking into the hole: %v", err)
+			}
+		}
+	}
+}
+
+// A reader whose remaining offsets were all compacted away has nothing left to
+// read either.
+func TestAReaderPastTheLastSurvivingRecordStops(t *testing.T) {
+	fs := sim.NewFS()
+	l, _, err := Open(fs, Config{Segment: Options{MaxBytes: 512, IndexInterval: 64}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer l.Close()
+
+	// One key, so compaction keeps exactly one record per segment and the
+	// offsets after it are all gaps.
+	for i := range 200 {
+		if _, err := l.Append(keyed("one", i)); err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
+	}
+	if _, err := l.CompactAll(); err != nil {
+		t.Fatalf("CompactAll: %v", err)
+	}
+
+	r, err := l.Reader(l.First())
+	if err != nil {
+		t.Fatalf("Reader: %v", err)
+	}
+	for {
+		_, err := r.Next()
+		if errors.Is(err, ErrEndOfLog) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next at %d: %v", r.Offset(), err)
+		}
+	}
+
+	// And again from an offset inside the gap that runs to the tail.
+	if err := r.Seek(l.Next() - 1); err != nil {
+		t.Fatalf("Seek into the trailing gap: %v", err)
+	}
+	for {
+		_, err := r.Next()
+		if errors.Is(err, ErrEndOfLog) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("Next after seeking into the gap: %v", err)
+		}
+	}
+}

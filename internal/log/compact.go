@@ -112,6 +112,12 @@ func (l *Log) Compact(base Offset) (Compaction, error) {
 	}
 	delete(l.sealed, base)
 
+	// It may also have been a segment os mode sealed without syncing, and
+	// a later Sync must not try to flush a closed file. The compacted
+	// replacement is durable already: written, synced, renamed, and the
+	// directory synced after it.
+	l.forget(src)
+
 	result.Kept = len(survivors)
 	result.Dropped = src.records() - len(survivors)
 	result.After = written
