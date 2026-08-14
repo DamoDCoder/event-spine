@@ -17,6 +17,7 @@ func replay(args []string) error {
 		faults = fs.String("faults", "", "faults to inject, as kind@position[:arg], space separated")
 		mode   = fs.String("durability", "", "log durability mode: batch, sync, or os")
 		shape  = fs.String("shape", "", "run shape, as seg=N index=N payload=N batch=N syncrecords=N")
+		load   = fs.String("workload", "", "workload rhythm: mixed or restart")
 		at     = fs.Int("at", -1, "scrub to this step and describe it in full")
 		ops    = fs.Bool("ops", false, "print the filesystem operations, with the faults that fired")
 		diff   = fs.Bool("diff", false, "compare against the same seed with no faults, and report where they part")
@@ -42,6 +43,7 @@ func replay(args []string) error {
 		Faults:     parsed,
 		Durability: *mode,
 		Shape:      parsedShape,
+		Workload:   *load,
 	}
 
 	if *diff {

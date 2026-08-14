@@ -70,6 +70,18 @@ type witness struct {
 	dropped     int
 	snapshots   int
 	steps       int
+	restarts    int
+
+	// The restart workload's state: a cursor that outlives the log it came
+	// from, and the highest offset it has handed over. A record delivered
+	// twice, or out of order, is the bug this is here to catch.
+	reader        *log.Reader
+	lastDelivered log.Offset
+	delivered     bool
+
+	// fs and durability are what a restart needs to open the log again.
+	fs         *FS
+	durability log.Durability
 }
 
 // runWorkload appends, syncs, commits, compacts, and snapshots until a fault
@@ -112,15 +124,25 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 	// inside Open itself and the checks still have to run against
 	// something.
 	w := &witness{
-		commits:  map[string]log.Offset{},
-		attempts: map[string][]log.Offset{},
+		commits:    map[string]log.Offset{},
+		attempts:   map[string][]log.Offset{},
+		fs:         fs,
+		durability: durabilityOf(cfg),
 	}
 
 	l, _, err := log.Open(fs, logCfg)
 	if err != nil {
 		return w, err
 	}
-	defer l.Close()
+	// A closure rather than `defer l.Close()`, because the restart workload
+	// replaces the log as it goes and the deferred call has to close
+	// whichever one the run ended with — which is none of them when a fault
+	// fired while the log was being reopened.
+	defer func() {
+		if l != nil {
+			l.Close()
+		}
+	}()
 
 	steps := cfg.Steps
 	if steps <= 0 {
@@ -153,7 +175,15 @@ func observeWorkload(fs *FS, cfg Config, observe func(*log.Log, int)) (*witness,
 			fs.record(f)
 		}
 
-		err := w.act(l, src, step, shape)
+		var err error
+		if cfg.Workload == "restart" {
+			l, err = w.restart(l, src, step, shape)
+			if l == nil {
+				return w, err
+			}
+		} else {
+			err = w.act(l, src, step, shape)
+		}
 
 		// A bit flip that fired weakens what the checks may demand: a
 		// record whose bytes were corrupted on the platter may be

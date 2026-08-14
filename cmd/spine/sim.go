@@ -87,9 +87,9 @@ func simSweep(args []string) error {
 	report := harness.Sweep(*from, *count, *minimize)
 
 	for _, f := range report.Failures {
-		fmt.Printf("FAIL seed %d steps %d %s [%s] faults %s\n     %v\n",
-			f.Config.Seed, f.Config.Steps, durabilityName(f.Config), f.Config.Shape,
-			harness.FormatFaults(f.Config.Faults), f.Err)
+		fmt.Printf("FAIL seed %d steps %d %s %s [%s] faults %s\n     %v\n",
+			f.Config.Seed, f.Config.Steps, workloadName(f.Config), durabilityName(f.Config),
+			f.Config.Shape, harness.FormatFaults(f.Config.Faults), f.Err)
 		if *out == "" {
 			continue
 		}
@@ -103,6 +103,7 @@ func simSweep(args []string) error {
 	fmt.Printf("\nsweep: %d seeds, %d failures\n", report.Runs, len(report.Failures))
 	fmt.Printf("injected: %s\n", formatCoverage(report.Faults))
 	fmt.Printf("modes: %s\n", formatCounts(report.Modes))
+	fmt.Printf("workloads: %s\n", formatCounts(report.Workloads))
 	fmt.Printf("shapes: %d distinct\n", len(report.Shapes))
 	fmt.Printf("exercised: %d compactions dropping %d records, %d snapshots (sampled)\n",
 		report.Compactions, report.Dropped, report.Snapshots)
@@ -206,6 +207,7 @@ func repro(args []string) error {
 		point  = fs.Int("point", 0, "shorthand for --faults crash@N")
 		mode   = fs.String("durability", "", "log durability mode: batch, sync, or os")
 		shape  = fs.String("shape", "", "run shape, as seg=N index=N payload=N batch=N syncrecords=N")
+		load   = fs.String("workload", "", "workload rhythm: mixed or restart")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -234,6 +236,7 @@ func repro(args []string) error {
 			Faults:     parsed,
 			Durability: *mode,
 			Shape:      parsedShape,
+			Workload:   *load,
 		}
 		if err := harness.Run(cfg); err != nil {
 			return fmt.Errorf("seed %d %s reproduces: %w", *seed, harness.FormatFaults(parsed), err)
@@ -291,6 +294,7 @@ func writeCorpusEntry(dir string, f harness.Failure) (string, error) {
 	body := fmt.Sprintf(`---
 seed: %d
 steps: %d
+workload: %s
 durability: %s
 shape: %s
 ops: %d
@@ -313,7 +317,8 @@ read yet.
 task repro SEED=%d FAULTS="%s"
 `+"```"+`
 `,
-		f.Config.Seed, f.Config.Steps, durabilityName(f.Config), f.Config.Shape, ops, signature,
+		f.Config.Seed, f.Config.Steps, workloadName(f.Config), durabilityName(f.Config),
+		f.Config.Shape, ops, signature,
 		harness.FormatFaults(f.Config.Faults), f.Err,
 		f.Config.Seed, harness.FormatFaults(f.Config.Faults))
 
@@ -325,6 +330,13 @@ task repro SEED=%d FAULTS="%s"
 
 // durabilityName is the mode a seed file records, defaulting to the one every
 // seed written before the field existed was running.
+func workloadName(cfg harness.Config) string {
+	if cfg.Workload == "" {
+		return "mixed"
+	}
+	return cfg.Workload
+}
+
 func durabilityName(cfg harness.Config) string {
 	if cfg.Durability == "" {
 		return "batch"
@@ -405,6 +417,14 @@ func parseCorpusEntry(file, body string) (corpusEntry, error) {
 				return entry, fmt.Errorf("corpus: %s: %w", file, err)
 			}
 			entry.cfg.Shape = shape
+
+		case "workload":
+			switch value {
+			case "mixed", "restart":
+				entry.cfg.Workload = value
+			default:
+				return entry, fmt.Errorf("corpus: %s: %q is not a workload", file, value)
+			}
 
 		case "durability":
 			switch value {

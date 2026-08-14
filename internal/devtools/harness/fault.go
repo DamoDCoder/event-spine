@@ -142,6 +142,16 @@ type Config struct {
 	// Shape is how big the run's records, batches, and segments are. A zero
 	// shape is the one every seed used before it was configurable.
 	Shape Shape
+
+	// Workload is the rhythm the run drives. Empty means "mixed", the one
+	// every seed used before there was a second.
+	//
+	// "restart" closes and reopens the log as it goes, and keeps a reader
+	// alive across those restarts and across compactions. Those are states
+	// the mixed workload cannot reach: it opens the log once and reads a
+	// record at a time, so recovery-then-resume and a cursor outliving the
+	// segments underneath it were both untested by any seed.
+	Workload string
 }
 
 // FormatFaults renders a fault list as the corpus stores it.

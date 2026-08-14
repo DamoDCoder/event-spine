@@ -85,8 +85,9 @@ tasks:
       FAULTS: '{{.FAULTS | default ""}}'
       DURABILITY: '{{.DURABILITY | default ""}}'
       SHAPE: '{{.SHAPE | default ""}}'
+      WORKLOAD: '{{.WORKLOAD | default ""}}'
     cmds:
-      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}" --durability "{{.DURABILITY}}" --shape "{{.SHAPE}}"
+      - go run ./cmd/spine repro --seed {{.SEED}} --steps {{.STEPS}} --faults "{{.FAULTS}}" --durability "{{.DURABILITY}}" --shape "{{.SHAPE}}" --workload "{{.WORKLOAD}}"
 
   sim:corpus:
     desc: Replay every seed in the regression corpus

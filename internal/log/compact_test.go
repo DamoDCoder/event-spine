@@ -430,6 +430,66 @@ func TestAReaderInAHoleRunningToTheTailStops(t *testing.T) {
 	}
 }
 
+// A reader outlives the segments underneath it.
+//
+// Compaction writes a replacement, renames it into place, and closes the handle
+// it replaced. A cursor sitting in that segment was then holding a closed file,
+// and its byte position pointed into a layout that no longer existed. Both are
+// use-after-compaction, and no seed reached them for four milestones because
+// every workload read one record at a time and let go of the cursor in between.
+//
+// Found by the restart workload, which keeps a cursor across compactions on
+// purpose: seeds/0012.md.
+func TestAReaderSurvivesCompactionUnderneathIt(t *testing.T) {
+	fs := sim.NewFS()
+	l, _, err := Open(fs, Config{Segment: Options{MaxBytes: 512, IndexInterval: 64}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer l.Close()
+
+	fillKeyed(t, l, 300, 4)
+
+	r, err := l.Reader(l.First())
+	if err != nil {
+		t.Fatalf("Reader: %v", err)
+	}
+
+	// Part way through, so the cursor is inside a segment compaction is
+	// about to replace.
+	var last Offset
+	for range 20 {
+		rec, err := r.Next()
+		if err != nil {
+			t.Fatalf("Next before compaction: %v", err)
+		}
+		last = rec.Offset
+	}
+
+	if _, err := l.CompactAll(); err != nil {
+		t.Fatalf("CompactAll: %v", err)
+	}
+
+	// The cursor keeps working, keeps ascending, and never hands back a
+	// record it already delivered.
+	for {
+		rec, err := r.Next()
+		if errors.Is(err, ErrEndOfLog) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next after compaction: %v", err)
+		}
+		if rec.Offset <= last {
+			t.Fatalf("the reader delivered offset %d after %d", rec.Offset, last)
+		}
+		last = rec.Offset
+	}
+	if last != l.Next()-1 {
+		t.Fatalf("the scan ended at %d, want the tail at %d", last, l.Next()-1)
+	}
+}
+
 // A reader whose remaining offsets were all compacted away has nothing left to
 // read either.
 func TestAReaderPastTheLastSurvivingRecordStops(t *testing.T) {

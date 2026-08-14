@@ -40,6 +40,7 @@ func CleanOps(cfg Config) (int, uint64, error) {
 		Steps:      cfg.Steps,
 		Durability: cfg.Durability,
 		Shape:      cfg.Shape,
+		Workload:   cfg.Workload,
 	}); err != nil {
 		return 0, 0, err
 	}
@@ -91,8 +92,18 @@ type Report struct {
 	// stopped varying is exactly the mistake that cost two bugs: a sweep
 	// pinned to one shape reports the same clean result as a sweep across
 	// all of them.
-	Modes  map[string]int
-	Shapes map[string]int
+	Modes     map[string]int
+	Shapes    map[string]int
+	Workloads map[string]int
+}
+
+// workloadName is the rhythm a config drives, defaulting to the one every seed
+// ran before there was a second.
+func workloadName(cfg Config) string {
+	if cfg.Workload == "" {
+		return "mixed"
+	}
+	return cfg.Workload
 }
 
 // Failure is one configuration that broke an invariant.
@@ -165,9 +176,10 @@ func Matrix(seed int64, maxPoints int) (Report, error) {
 // in code.
 func Sweep(from int64, count int, minimize bool) Report {
 	report := Report{
-		Faults: map[Kind]int{},
-		Modes:  map[string]int{},
-		Shapes: map[string]int{},
+		Faults:    map[Kind]int{},
+		Modes:     map[string]int{},
+		Shapes:    map[string]int{},
+		Workloads: map[string]int{},
 	}
 
 	for i := range count {
@@ -184,6 +196,7 @@ func Sweep(from int64, count int, minimize bool) Report {
 		}
 		report.Modes[mode]++
 		report.Shapes[cfg.Shape.String()]++
+		report.Workloads[workloadName(cfg)]++
 
 		// The coverage counters come from a clean run of the same seed,
 		// since a faulted run stops early and would undercount what the
@@ -195,6 +208,7 @@ func Sweep(from int64, count int, minimize bool) Report {
 				Steps:      cfg.Steps,
 				Durability: cfg.Durability,
 				Shape:      cfg.Shape,
+				Workload:   cfg.Workload,
 			}); err == nil {
 				report.Compactions += w.compactions
 				report.Dropped += w.dropped
@@ -241,12 +255,20 @@ func swarm(seed int64) Config {
 	// reason: a constant is an axis nobody is looking along.
 	cfg.Shape = shapeFor(src)
 
+	// One run in three restarts as it goes and keeps a cursor across those
+	// restarts. Mixed stays the majority because it is the rhythm the
+	// invariants were written against.
+	if src.Intn(3) == 0 {
+		cfg.Workload = "restart"
+	}
+
 	probe := NewFS(nil)
 	if _, err := runWorkload(probe, Config{
 		Seed:       seed,
 		Steps:      cfg.Steps,
 		Durability: cfg.Durability,
 		Shape:      cfg.Shape,
+		Workload:   cfg.Workload,
 	}); err != nil {
 		return cfg
 	}
@@ -317,7 +339,13 @@ func Minimize(cfg Config, failure error) (Config, error) {
 	for changed {
 		changed = false
 		for i := range cfg.Faults {
-			shorter := Config{Seed: cfg.Seed, Steps: cfg.Steps, Durability: cfg.Durability, Shape: cfg.Shape}
+			shorter := Config{
+				Seed:       cfg.Seed,
+				Steps:      cfg.Steps,
+				Durability: cfg.Durability,
+				Shape:      cfg.Shape,
+				Workload:   cfg.Workload,
+			}
 			shorter.Faults = append(shorter.Faults, cfg.Faults[:i]...)
 			shorter.Faults = append(shorter.Faults, cfg.Faults[i+1:]...)
 
@@ -343,6 +371,7 @@ func Minimize(cfg Config, failure error) (Config, error) {
 			Faults:     cfg.Faults,
 			Durability: cfg.Durability,
 			Shape:      cfg.Shape,
+			Workload:   cfg.Workload,
 		}
 		if shorter.Steps > 0 && reproduces(shorter) {
 			steps = shorter.Steps
