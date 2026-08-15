@@ -101,7 +101,7 @@ func RecordLen(e core.Event) int {
 // It validates the event first: an event that cannot be framed is a bug in the
 // caller, and encoding it anyway would put a record on disk that no decoder
 // will accept.
-func Append(dst []byte, off Offset, e core.Event) ([]byte, error) {
+func appendRecord(dst []byte, off Offset, e core.Event) ([]byte, error) {
 	if err := e.Validate(); err != nil {
 		return dst, err
 	}
@@ -159,7 +159,7 @@ type Record struct {
 // It never trusts the buffer. Every field that indexes into the record is
 // checked against the record's own bounds before it is used, because these
 // bytes came off a disk.
-func Decode(b []byte) (Record, error) {
+func decodeRecord(b []byte) (Record, error) {
 	if len(b) < HeaderLen {
 		return Record{}, fmt.Errorf("%w: %d bytes available, header is %d", ErrTorn, len(b), HeaderLen)
 	}
@@ -212,8 +212,8 @@ func Decode(b []byte) (Record, error) {
 // detectable — but only if somebody compares. Prefer this over Decode wherever
 // the expected offset is known, which is everywhere except a tool inspecting an
 // unknown file.
-func DecodeAt(b []byte, want Offset) (Record, error) {
-	rec, err := Decode(b)
+func decodeRecordAt(b []byte, want Offset) (Record, error) {
+	rec, err := decodeRecord(b)
 	if err != nil {
 		return rec, err
 	}

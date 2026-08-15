@@ -335,7 +335,7 @@ func TestATornCommitIsDiscardedAndTheRestSurvive(t *testing.T) {
 
 	// Cut the last commit in half, which is what a crash between the write
 	// and the sync leaves behind.
-	f, err := fs.Open(CommitsFile)
+	f, err := fs.Open(commitsFile)
 	if err != nil {
 		t.Fatalf("open the commits log: %v", err)
 	}
@@ -386,8 +386,8 @@ func TestATornCommitIsDiscardedAndTheRestSurvive(t *testing.T) {
 // The commits log lives in the segment directory and must never be mistaken for
 // a segment.
 func TestTheCommitsFileIsNotASegment(t *testing.T) {
-	if _, ok := ParseSegmentName(CommitsFile); ok {
-		t.Fatalf("%q parses as a segment name", CommitsFile)
+	if _, ok := parseSegmentName(commitsFile); ok {
+		t.Fatalf("%q parses as a segment name", commitsFile)
 	}
 
 	fs := sim.NewFS()

@@ -7,12 +7,12 @@ import (
 	"github.com/DamoDCoder/event-spine/core"
 )
 
-// CompactingSuffix marks the half-written segment a compaction is building.
+// compactingSuffix marks the half-written segment a compaction is building.
 //
 // A crash leaves one of these behind. It is not a segment name, so recovery
 // ignores it and the original file is still in place: the rename is what makes
 // a compaction happen, and until it runs nothing has.
-const CompactingSuffix = ".compacting"
+const compactingSuffix = ".compacting"
 
 // Compaction reports what compacting one segment removed.
 type Compaction struct {
@@ -81,8 +81,8 @@ func (l *Log) Compact(base Offset) (Compaction, error) {
 		return result, nil
 	}
 
-	name := SegmentName(base)
-	tmp := name + CompactingSuffix
+	name := segmentName(base)
+	tmp := name + compactingSuffix
 	written, err := l.writeCompacted(tmp, base, src, survivors)
 	if err != nil {
 		// The original is untouched, so cleaning up the temporary file
@@ -129,7 +129,7 @@ func (l *Log) Compact(base Offset) (Compaction, error) {
 //
 // The map holds offsets rather than records, so a segment full of large
 // payloads costs one integer per key here rather than a second copy of itself.
-func survivorsOf(src *Segment) (map[Offset]bool, error) {
+func survivorsOf(src *segment) (map[Offset]bool, error) {
 	newest := map[string]Offset{}
 
 	pos := int64(0)
@@ -156,7 +156,7 @@ func survivorsOf(src *Segment) (map[Offset]bool, error) {
 // The records are copied in offset order, which a map cannot supply: the
 // survivors are looked up by offset while walking the source in the order it is
 // already in, so nothing here depends on how Go feels about iterating a map.
-func (l *Log) writeCompacted(tmp string, base Offset, src *Segment, survivors map[Offset]bool) (int64, error) {
+func (l *Log) writeCompacted(tmp string, base Offset, src *segment, survivors map[Offset]bool) (int64, error) {
 	if err := l.removeStale(tmp); err != nil {
 		return 0, err
 	}

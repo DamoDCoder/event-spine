@@ -35,7 +35,7 @@ func TestRoundTrip(t *testing.T) {
 		want := sampleEvent(src)
 		off := Offset(i)
 
-		buf, err := Append(nil, off, want)
+		buf, err := appendRecord(nil, off, want)
 		if err != nil {
 			t.Fatalf("Append: %v", err)
 		}
@@ -43,7 +43,7 @@ func TestRoundTrip(t *testing.T) {
 			t.Fatalf("encoded %d bytes, RecordLen says %d", len(buf), RecordLen(want))
 		}
 
-		got, err := DecodeAt(buf, off)
+		got, err := decodeRecordAt(buf, off)
 		if err != nil {
 			t.Fatalf("DecodeAt: %v", err)
 		}
@@ -69,7 +69,7 @@ func TestBodyIsTheCanonicalEncoding(t *testing.T) {
 	src := sim.NewSource(7)
 	for range 100 {
 		e := sampleEvent(src)
-		buf, err := Append(nil, 42, e)
+		buf, err := appendRecord(nil, 42, e)
 		if err != nil {
 			t.Fatalf("Append: %v", err)
 		}
@@ -84,19 +84,19 @@ func TestBodyIsTheCanonicalEncoding(t *testing.T) {
 // treats corruption as a fault worth stopping for.
 func TestEveryPrefixIsTornNotCorrupt(t *testing.T) {
 	e := core.Event{Key: "acct-0001", Time: 99, Schema: 1, Payload: []byte("some payload bytes")}
-	full, err := Append(nil, 5, e)
+	full, err := appendRecord(nil, 5, e)
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
 
 	for n := range len(full) {
-		_, err := Decode(full[:n])
+		_, err := decodeRecord(full[:n])
 		if !errors.Is(err, ErrTorn) {
 			t.Fatalf("a %d byte prefix of a %d byte record decoded as %v, want ErrTorn", n, len(full), err)
 		}
 	}
 
-	if _, err := Decode(full); err != nil {
+	if _, err := decodeRecord(full); err != nil {
 		t.Fatalf("the complete record failed to decode: %v", err)
 	}
 }
@@ -110,7 +110,7 @@ func TestEverySingleBitFlipIsDetected(t *testing.T) {
 	e := core.Event{Key: "acct-0001", Time: 1234, Schema: 3, Payload: []byte("payload")}
 	const off Offset = 77
 
-	clean, err := Append(nil, off, e)
+	clean, err := appendRecord(nil, off, e)
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestEverySingleBitFlipIsDetected(t *testing.T) {
 			corrupt := append([]byte(nil), clean...)
 			corrupt[bytePos] ^= 1 << bit
 
-			_, err := Decode(corrupt)
+			_, err := decodeRecord(corrupt)
 			if err == nil {
 				t.Fatalf("byte %d bit %d: a flipped record decoded cleanly", bytePos, bit)
 			}
@@ -135,7 +135,7 @@ func TestEverySingleBitFlipIsDetected(t *testing.T) {
 			}
 
 			// DecodeAt is strictly stronger, never weaker.
-			if _, err := DecodeAt(corrupt, off); err == nil {
+			if _, err := decodeRecordAt(corrupt, off); err == nil {
 				t.Fatalf("byte %d bit %d: DecodeAt accepted what Decode rejected", bytePos, bit)
 			}
 		}
@@ -148,7 +148,7 @@ func TestEverySingleBitFlipIsDetected(t *testing.T) {
 func TestAFlippedLengthIsCaughtByFramingRatherThanTheChecksum(t *testing.T) {
 	e := core.Event{Key: "acct-0001", Time: 1234, Schema: 3, Payload: []byte("payload")}
 
-	clean, err := Append(nil, 77, e)
+	clean, err := appendRecord(nil, 77, e)
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestAFlippedLengthIsCaughtByFramingRatherThanTheChecksum(t *testing.T) {
 			corrupt := append([]byte(nil), clean...)
 			corrupt[bytePos] ^= 1 << bit
 
-			if _, err := Decode(corrupt); err == nil {
+			if _, err := decodeRecord(corrupt); err == nil {
 				t.Fatalf("byte %d bit %d: a flipped length decoded cleanly", bytePos, bit)
 			}
 		}
@@ -167,7 +167,7 @@ func TestAFlippedLengthIsCaughtByFramingRatherThanTheChecksum(t *testing.T) {
 
 func TestDecodeRejectsMalformedFraming(t *testing.T) {
 	e := core.Event{Key: "k", Time: 1, Schema: 1, Payload: []byte("v")}
-	clean, err := Append(nil, 1, e)
+	clean, err := appendRecord(nil, 1, e)
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestDecodeRejectsMalformedFraming(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Decode(tc.in); !errors.Is(err, tc.want) {
+			if _, err := decodeRecord(tc.in); !errors.Is(err, tc.want) {
 				t.Fatalf("got %v, want %v", err, tc.want)
 			}
 		})
@@ -202,7 +202,7 @@ func TestDecodeRejectsMalformedFraming(t *testing.T) {
 // alternative to a bounds check is a slice bound panic on hostile input.
 func TestDecodeRejectsAKeyLengthPastTheRecord(t *testing.T) {
 	e := core.Event{Key: "k", Time: 1, Schema: 1, Payload: []byte("v")}
-	b, err := Append(nil, 1, e)
+	b, err := appendRecord(nil, 1, e)
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -213,13 +213,13 @@ func TestDecodeRejectsAKeyLengthPastTheRecord(t *testing.T) {
 	sum := crc32.Checksum(b[crcStart:], castagnoli)
 	binary.LittleEndian.PutUint32(b[crcField:crcField+4], sum)
 
-	if _, err := Decode(b); !errors.Is(err, ErrCorrupt) {
+	if _, err := decodeRecord(b); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("got %v, want ErrCorrupt", err)
 	}
 }
 
 func TestAppendRejectsAnInvalidEvent(t *testing.T) {
-	if _, err := Append(nil, 0, core.Event{Schema: 0}); !errors.Is(err, core.ErrInvalidEvent) {
+	if _, err := appendRecord(nil, 0, core.Event{Schema: 0}); !errors.Is(err, core.ErrInvalidEvent) {
 		t.Fatalf("got %v, want ErrInvalidEvent", err)
 	}
 }
@@ -234,7 +234,7 @@ func TestRecordsScanBackInOrder(t *testing.T) {
 	for i := range 200 {
 		e := sampleEvent(src)
 		var err error
-		buf, err = Append(buf, Offset(i), e)
+		buf, err = appendRecord(buf, Offset(i), e)
 		if err != nil {
 			t.Fatalf("Append: %v", err)
 		}
@@ -243,7 +243,7 @@ func TestRecordsScanBackInOrder(t *testing.T) {
 
 	var pos int
 	for i := range want {
-		rec, err := DecodeAt(buf[pos:], Offset(i))
+		rec, err := decodeRecordAt(buf[pos:], Offset(i))
 		if err != nil {
 			t.Fatalf("record %d at byte %d: %v", i, pos, err)
 		}
@@ -256,20 +256,20 @@ func TestRecordsScanBackInOrder(t *testing.T) {
 		t.Fatalf("scanned %d of %d bytes", pos, len(buf))
 	}
 
-	if _, err := Decode(buf[pos:]); !errors.Is(err, ErrTorn) {
+	if _, err := decodeRecord(buf[pos:]); !errors.Is(err, ErrTorn) {
 		t.Fatalf("decoding past the last record gave %v, want ErrTorn", err)
 	}
 }
 
 func TestDecodeAtRejectsTheWrongOffset(t *testing.T) {
-	b, err := Append(nil, 10, core.Event{Key: "k", Time: 1, Schema: 1})
+	b, err := appendRecord(nil, 10, core.Event{Key: "k", Time: 1, Schema: 1})
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
-	if _, err := DecodeAt(b, 11); !errors.Is(err, ErrCorrupt) {
+	if _, err := decodeRecordAt(b, 11); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("got %v, want ErrCorrupt", err)
 	}
-	if _, err := DecodeAt(b, 10); err != nil {
+	if _, err := decodeRecordAt(b, 10); err != nil {
 		t.Fatalf("the right offset was rejected: %v", err)
 	}
 }
@@ -278,7 +278,7 @@ func TestRecordLenMatchesTheEncoding(t *testing.T) {
 	src := sim.NewSource(11)
 	for range 200 {
 		e := sampleEvent(src)
-		b, err := Append(nil, 0, e)
+		b, err := appendRecord(nil, 0, e)
 		if err != nil {
 			t.Fatalf("Append: %v", err)
 		}

@@ -78,7 +78,7 @@ func (l *Log) Snapshot(off Offset, state []byte) error {
 	}
 
 	name := snapshotName(off)
-	tmp := name + CompactingSuffix
+	tmp := name + compactingSuffix
 	if err := l.removeStale(tmp); err != nil {
 		return err
 	}

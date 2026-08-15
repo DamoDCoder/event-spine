@@ -49,7 +49,7 @@ const DefaultSyncRecords = 1024
 
 // Config configures a log.
 type Config struct {
-	// Segment configures each segment file.
+	// segment configures each segment file.
 	Segment Options
 
 	// Durability selects when appends are made durable.
@@ -96,9 +96,9 @@ type Log struct {
 
 	// sealed caches segments that have been opened for reading. The map is
 	// never ranged: bases is what supplies order.
-	sealed map[Offset]*Segment
+	sealed map[Offset]*segment
 
-	active    *Segment
+	active    *segment
 	sinceSync int
 	lastSync  core.Time
 
@@ -143,13 +143,13 @@ func Open(fs core.FS, cfg Config) (*Log, Recovery, error) {
 	// the directory would be worse.
 	var bases []Offset
 	for _, name := range names {
-		if base, ok := ParseSegmentName(name); ok {
+		if base, ok := parseSegmentName(name); ok {
 			bases = append(bases, base)
 		}
 	}
 	sort.Slice(bases, func(i, j int) bool { return bases[i] < bases[j] })
 
-	l := &Log{fs: fs, cfg: cfg, bases: bases, sealed: map[Offset]*Segment{}}
+	l := &Log{fs: fs, cfg: cfg, bases: bases, sealed: map[Offset]*segment{}}
 
 	if len(bases) == 0 {
 		active, err := l.createSegment(0)
@@ -164,7 +164,7 @@ func Open(fs core.FS, cfg Config) (*Log, Recovery, error) {
 	// The highest-numbered segment is the one a crash could have caught
 	// mid-append, so it is the only one scanned here.
 	activeBase := bases[len(bases)-1]
-	active, rec, err := OpenSegment(fs, SegmentName(activeBase), cfg.Segment)
+	active, rec, err := openSegmentTruncating(fs, segmentName(activeBase), cfg.Segment)
 	if err != nil {
 		return nil, Recovery{}, err
 	}
@@ -239,8 +239,8 @@ func (l *Log) Append(events ...core.Event) ([]Offset, error) {
 // leave a hole in the middle of the segment list instead of a torn tail at the
 // end, and recovery is built to expect the second. The cost is one fsync per
 // segment, which is once per 64 MiB by default.
-func (l *Log) createSegment(base Offset) (*Segment, error) {
-	seg, err := CreateSegment(l.fs, base, l.cfg.Segment)
+func (l *Log) createSegment(base Offset) (*segment, error) {
+	seg, err := newSegment(l.fs, base, l.cfg.Segment)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +339,7 @@ func (l *Log) Read(off Offset) (Record, error) {
 }
 
 // segmentFor returns the segment holding off.
-func (l *Log) segmentFor(off Offset) (*Segment, error) {
+func (l *Log) segmentFor(off Offset) (*segment, error) {
 	if off < l.First() || off >= l.Next() {
 		return nil, fmt.Errorf("%w: %d is outside the log, which holds [%d, %d)",
 			ErrNotFound, off, l.First(), l.Next())
@@ -361,7 +361,7 @@ func (l *Log) segmentFor(off Offset) (*Segment, error) {
 	// Opened read-only: a sealed segment that has grown a torn tail since
 	// it was sealed has been damaged by something other than a crash
 	// mid-append, and truncating it would turn that into silent data loss.
-	s, err := OpenSealedSegment(l.fs, SegmentName(base), l.cfg.Segment)
+	s, err := openSealedSegment(l.fs, segmentName(base), l.cfg.Segment)
 	if err != nil {
 		return nil, err
 	}

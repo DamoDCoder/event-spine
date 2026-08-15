@@ -7,6 +7,11 @@ links to the seed that found it.
 
 > **This is v0.** The surface will break. Pin a version, expect to move.
 
+The public surface is deliberately small: `log` exposes the log, its reader,
+consumer groups, snapshots, compaction, and the errors you match on. Segments,
+record framing, and file naming are not part of it — they are how the log is
+built, not what it offers, and keeping them private is what lets them change.
+
 ## What It Is
 
 An append-only log, in your process, as a library. Not a server, not a broker,

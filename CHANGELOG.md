@@ -105,6 +105,14 @@ grouped under `Unreleased`.
   The spine's `go` directive is 1.24 — the floor is kept as low as the code
   allows so a consumer is never forced to upgrade, while the container still
   pins the toolchain by digest as the authoritative build.
+- **The public surface is trimmed to what a consumer needs.** `log` no longer
+  exports `Segment`, `OpenSegment`, `SegmentName`, `ParseSegmentName`, the
+  record framing functions, or the file-name constants: they are how the log is
+  built rather than what it offers, and every one of them would have constrained
+  a future change. `sim` no longer exports the ledger workload, which is the
+  determinism gate's fixture and now lives in `internal/devtools/ledger` — a
+  project adopting the spine wants a clock, a filesystem, and a seeded source,
+  not this repository's toy ledger.
 - `BenchmarkLogReadCold` and `BenchmarkLogOpen` use a `b.N` loop rather than
   `b.Loop()`. Both open a fresh log every iteration inside a `StopTimer` region,
   and `b.Loop()` continues on timed duration alone, so they never converged: a

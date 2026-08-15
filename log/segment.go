@@ -11,7 +11,7 @@ import (
 	"github.com/DamoDCoder/event-spine/core"
 )
 
-// Segment defaults, from docs/log-design.md.
+// segment defaults, from docs/log-design.md.
 const (
 	// DefaultMaxBytes is when a segment rolls.
 	DefaultMaxBytes = 64 << 20
@@ -21,8 +21,8 @@ const (
 	// lookup cost is set by configuration rather than by log size.
 	DefaultIndexInterval = 4 << 10
 
-	// SegmentSuffix is the extension every segment file carries.
-	SegmentSuffix = ".log"
+	// segmentSuffix is the extension every segment file carries.
+	segmentSuffix = ".log"
 
 	// segmentDigits zero-pads a segment name so names sort lexically in
 	// offset order. A directory listing is then already in the right order,
@@ -60,18 +60,18 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// SegmentName returns the file name for a segment beginning at base.
-func SegmentName(base Offset) string {
-	return fmt.Sprintf("%0*d%s", segmentDigits, uint64(base), SegmentSuffix)
+// segmentName returns the file name for a segment beginning at base.
+func segmentName(base Offset) string {
+	return fmt.Sprintf("%0*d%s", segmentDigits, uint64(base), segmentSuffix)
 }
 
-// ParseSegmentName returns the base offset encoded in a segment file name.
+// parseSegmentName returns the base offset encoded in a segment file name.
 //
 // Names come from directory listings, which are untrusted: a file someone
 // dropped in the log directory must be rejected rather than parsed into an
 // offset that then indexes something.
-func ParseSegmentName(name string) (Offset, bool) {
-	digits, ok := strings.CutSuffix(name, SegmentSuffix)
+func parseSegmentName(name string) (Offset, bool) {
+	digits, ok := strings.CutSuffix(name, segmentSuffix)
 	if !ok || len(digits) != segmentDigits {
 		return 0, false
 	}
@@ -88,7 +88,7 @@ type indexEntry struct {
 	pos    int64
 }
 
-// Segment is one append-only file plus the sparse index over it.
+// segment is one append-only file plus the sparse index over it.
 //
 // The index is built in memory rather than written to its own file.
 // docs/log-design.md describes an index file, and this deviates deliberately:
@@ -96,7 +96,7 @@ type indexEntry struct {
 // from the segment it indexes. It stays in memory until `task bench:log` shows
 // that rebuilding it on open is where the time goes. Optimising before that
 // measurement would be trading a real failure mode for an imagined saving.
-type Segment struct {
+type segment struct {
 	file core.File
 	name string
 	opts Options
@@ -124,20 +124,20 @@ type Segment struct {
 	one     [1]core.Event
 }
 
-// CreateSegment makes a new empty segment beginning at base.
-func CreateSegment(fs core.FS, base Offset, opts Options) (*Segment, error) {
-	return createNamed(fs, SegmentName(base), base, opts)
+// newSegment makes a new empty segment beginning at base.
+func newSegment(fs core.FS, base Offset, opts Options) (*segment, error) {
+	return createNamed(fs, segmentName(base), base, opts)
 }
 
 // createNamed makes a record file whose name does not encode its base offset.
 // See openNamed for why that exists.
-func createNamed(fs core.FS, name string, base Offset, opts Options) (*Segment, error) {
+func createNamed(fs core.FS, name string, base Offset, opts Options) (*segment, error) {
 	opts = opts.withDefaults()
 	f, err := fs.Create(name)
 	if err != nil {
 		return nil, fmt.Errorf("log: create segment %s: %w", name, err)
 	}
-	return &Segment{
+	return &segment{
 		file:     f,
 		name:     name,
 		opts:     opts,
@@ -154,7 +154,7 @@ func createNamed(fs core.FS, name string, base Offset, opts Options) (*Segment, 
 // Use this wherever the exact offset is known, which is every lookup that went
 // through the index: it is the only check covering the offset field, since the
 // CRC deliberately does not.
-func (s *Segment) readRecordAt(pos int64, want Offset) (Record, error) {
+func (s *segment) readRecordAt(pos int64, want Offset) (Record, error) {
 	rec, err := s.readRecordFrom(pos, want)
 	if err != nil {
 		return Record{}, err
@@ -179,7 +179,7 @@ func (s *Segment) readRecordAt(pos int64, want Offset) (Record, error) {
 // size, because the header is what says how long the record is and a guess
 // would either over-read past the end of the file or under-read and need
 // stitching.
-func (s *Segment) readRecordFrom(pos int64, atLeast Offset) (Record, error) {
+func (s *segment) readRecordFrom(pos int64, atLeast Offset) (Record, error) {
 	header := make([]byte, HeaderLen)
 	n, err := s.file.ReadAt(header, pos)
 	switch {
@@ -208,7 +208,7 @@ func (s *Segment) readRecordFrom(pos int64, atLeast Offset) (Record, error) {
 			return Record{}, fmt.Errorf("log: read %s at %d: %w", s.name, pos, err)
 		}
 	}
-	rec, err := Decode(buf)
+	rec, err := decodeRecord(buf)
 	if err != nil {
 		return Record{}, err
 	}
@@ -221,7 +221,7 @@ func (s *Segment) readRecordFrom(pos int64, atLeast Offset) (Record, error) {
 
 // noteIndex records a sparse index entry when the segment has grown past the
 // configured interval since the last one.
-func (s *Segment) noteIndex(off Offset, pos int64) {
+func (s *segment) noteIndex(off Offset, pos int64) {
 	if pos-s.indexed < s.opts.IndexInterval || pos == 0 {
 		return
 	}
@@ -233,7 +233,7 @@ func (s *Segment) noteIndex(off Offset, pos int64) {
 //
 // Append does not sync. Durability is the caller's choice, because the three
 // modes in docs/log-design.md differ only in when the caller asks for it.
-func (s *Segment) Append(e core.Event) (Offset, error) {
+func (s *segment) Append(e core.Event) (Offset, error) {
 	// The one-element slice is a field rather than a local, so taking a
 	// slice of it does not escape to the heap on every append. bench/log.txt
 	// is why that is worth a line of explanation: at 1.4 microseconds an
@@ -260,7 +260,7 @@ func (s *Segment) Append(e core.Event) (Offset, error) {
 // A short return is normal and means the segment filled. An error after a
 // non-zero count means the events up to that count were written and the one
 // after it was rejected.
-func (s *Segment) AppendAll(events []core.Event) (int, Offset, error) {
+func (s *segment) AppendAll(events []core.Event) (int, Offset, error) {
 	if s.sealed {
 		return 0, 0, fmt.Errorf("log: append to %s: %w", s.name, ErrSealed)
 	}
@@ -278,7 +278,7 @@ func (s *Segment) AppendAll(events []core.Event) (int, Offset, error) {
 		// current size plus everything already staged in the buffer.
 		pos := s.size + int64(len(s.scratch))
 
-		buf, err := Append(s.scratch, first+Offset(i), e)
+		buf, err := appendRecord(s.scratch, first+Offset(i), e)
 		if err != nil {
 			// Append validates before it encodes, so the buffer still
 			// holds exactly the records staged before this one. The
@@ -328,13 +328,13 @@ func (s *Segment) AppendAll(events []core.Event) (int, Offset, error) {
 // and must keep their original offsets, because an offset a consumer committed
 // has to still mean the same record afterwards. Offsets must still ascend, so
 // this cannot be used to rewrite history, only to leave holes in it.
-func (s *Segment) appendAt(off Offset, e core.Event) error {
+func (s *segment) appendAt(off Offset, e core.Event) error {
 	if off < s.next {
 		return fmt.Errorf("log: cannot write offset %d to %s, which is already at %d", off, s.name, s.next)
 	}
 
 	s.scratch = s.scratch[:0]
-	buf, err := Append(s.scratch, off, e)
+	buf, err := appendRecord(s.scratch, off, e)
 	if err != nil {
 		return err
 	}
@@ -354,10 +354,10 @@ func (s *Segment) appendAt(off Offset, e core.Event) error {
 
 // records returns how many records the segment holds, which after a compaction
 // is fewer than the range its offsets span.
-func (s *Segment) records() int { return s.count }
+func (s *segment) records() int { return s.count }
 
 // Read returns the record at off.
-func (s *Segment) Read(off Offset) (Record, error) {
+func (s *segment) Read(off Offset) (Record, error) {
 	pos, err := s.locate(off)
 	if err != nil {
 		return Record{}, err
@@ -374,7 +374,7 @@ func (s *Segment) Read(off Offset) (Record, error) {
 // A sequential reader calls this once and then advances by each record's own
 // length, which is why it is separate from Read: paying the search per record
 // is what makes a scan cost more than the bytes it reads.
-func (s *Segment) locate(off Offset) (int64, error) {
+func (s *segment) locate(off Offset) (int64, error) {
 	pos, found, err := s.locateFrom(off)
 	if err != nil {
 		return 0, err
@@ -393,7 +393,7 @@ func (s *Segment) locate(off Offset) (int64, error) {
 //
 // This is what a cursor needs and an exact lookup does not: after compaction the
 // answer to "where does offset 40 live" may be "it does not, and 47 is next".
-func (s *Segment) locateFrom(off Offset) (int64, Offset, error) {
+func (s *segment) locateFrom(off Offset) (int64, Offset, error) {
 	if off < s.base {
 		off = s.base
 	}
@@ -424,7 +424,7 @@ func (s *Segment) locateFrom(off Offset) (int64, Offset, error) {
 }
 
 // Sync makes everything appended so far durable.
-func (s *Segment) Sync() error {
+func (s *segment) Sync() error {
 	if err := s.file.Sync(); err != nil {
 		return fmt.Errorf("log: sync %s: %w", s.name, err)
 	}
@@ -432,26 +432,26 @@ func (s *Segment) Sync() error {
 }
 
 // Seal marks the segment immutable. It is idempotent.
-func (s *Segment) Seal() { s.sealed = true }
+func (s *segment) Seal() { s.sealed = true }
 
 // Full reports whether the segment has reached its configured size.
-func (s *Segment) Full() bool { return s.size >= s.maxBytes }
+func (s *segment) Full() bool { return s.size >= s.maxBytes }
 
 // Base returns the first offset the segment can hold.
-func (s *Segment) Base() Offset { return s.base }
+func (s *segment) Base() Offset { return s.base }
 
 // Next returns the offset the next append will be assigned.
-func (s *Segment) Next() Offset { return s.next }
+func (s *segment) Next() Offset { return s.next }
 
 // Bytes returns the segment's current size on disk.
-func (s *Segment) Bytes() int64 { return s.size }
+func (s *segment) Bytes() int64 { return s.size }
 
 // Name returns the segment's file name.
-func (s *Segment) Name() string { return s.name }
+func (s *segment) Name() string { return s.name }
 
 // Close releases the underlying file without syncing it. A caller that wants
 // durability asks for it.
-func (s *Segment) Close() error {
+func (s *segment) Close() error {
 	if err := s.file.Close(); err != nil {
 		return fmt.Errorf("log: close %s: %w", s.name, err)
 	}

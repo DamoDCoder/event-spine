@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/DamoDCoder/event-spine/core"
-	"github.com/DamoDCoder/event-spine/sim"
+	"github.com/DamoDCoder/event-spine/internal/devtools/ledger"
 )
 
 // verifyDomain separates the aggregate digest from every other SHA-256 here.
@@ -61,9 +61,9 @@ func verifyDeterminism(args []string) error {
 	)
 
 	for seed := 1; seed <= *seeds; seed++ {
-		w := sim.Workload{Seed: int64(seed), Commands: *commands, Accounts: *accounts}
+		w := ledger.Workload{Seed: int64(seed), Commands: *commands, Accounts: *accounts}
 
-		first, err := sim.Run(w)
+		first, err := ledger.Run(w)
 		if err != nil {
 			return fmt.Errorf("seed %d: %w", seed, err)
 		}
@@ -74,7 +74,7 @@ func verifyDeterminism(args []string) error {
 		// one process — which is the cheapest possible place to catch
 		// it.
 		for i := 1; i < *repeat; i++ {
-			again, err := sim.Run(w)
+			again, err := ledger.Run(w)
 			if err != nil {
 				return fmt.Errorf("seed %d, repeat %d: %w", seed, i, err)
 			}

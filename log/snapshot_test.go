@@ -163,7 +163,7 @@ func TestATornSnapshotIsRefused(t *testing.T) {
 
 func TestSnapshotNamesAreNotSegments(t *testing.T) {
 	name := snapshotName(1234)
-	if _, ok := ParseSegmentName(name); ok {
+	if _, ok := parseSegmentName(name); ok {
 		t.Fatalf("%q parses as a segment name", name)
 	}
 	off, ok := parseSnapshotName(name)
@@ -175,7 +175,7 @@ func TestSnapshotNamesAreNotSegments(t *testing.T) {
 	// reads.
 	for _, junk := range []string{
 		"", "snapshot.state", "snapshot-.state", "snapshot-12.state",
-		SegmentName(0), CommitsFile, "snapshot-0000000000000000000x.state",
+		segmentName(0), commitsFile, "snapshot-0000000000000000000x.state",
 	} {
 		if _, ok := parseSnapshotName(junk); ok {
 			t.Fatalf("%q was accepted as a snapshot name", junk)

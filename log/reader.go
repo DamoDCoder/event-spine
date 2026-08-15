@@ -20,7 +20,7 @@ var ErrEndOfLog = errors.New("log: reader has caught up")
 // a mutex would otherwise make invisible.
 type Reader struct {
 	log *Log
-	seg *Segment
+	seg *segment
 
 	// pos is the byte position of the record at next, within seg. Holding
 	// it is the whole point of a cursor: a scan advances by each record's

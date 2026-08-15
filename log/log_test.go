@@ -80,7 +80,7 @@ func TestLogRollsAndReadsAcrossSegments(t *testing.T) {
 		}
 		readAll(t, l, n)
 
-		// Segment bases are ascending, gapless in the sense that each
+		// segment bases are ascending, gapless in the sense that each
 		// one begins where the previous ended, and the last is the
 		// active one.
 		bases := l.Segments()
@@ -272,7 +272,7 @@ func TestADamagedSealedSegmentIsReportedNotTruncated(t *testing.T) {
 	}
 
 	// Corrupt the body of the first record of the first sealed segment.
-	name := SegmentName(bases[0])
+	name := segmentName(bases[0])
 	before := fileSize(t, fs, name)
 	if err := flipByte(fs, name, crcStart); err != nil {
 		t.Fatalf("flip: %v", err)

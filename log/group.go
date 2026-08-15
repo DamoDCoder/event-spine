@@ -9,13 +9,13 @@ import (
 	"github.com/DamoDCoder/event-spine/core"
 )
 
-// CommitsFile holds every consumer group's committed offsets.
+// commitsFile holds every consumer group's committed offsets.
 //
 // It lives beside the segments and carries a name no segment can have, so a
 // directory listing cannot mistake one for the other. It is a file of framed
 // records like any segment, which is what gives it checksums and torn-tail
 // recovery without a second implementation of either.
-const CommitsFile = "commits.groups"
+const commitsFile = "commits.groups"
 
 // commitSchema is the schema version of a commit record. It is separate from
 // the schema of whatever the log carries, because a commit is this package's
@@ -52,7 +52,7 @@ type Commit struct {
 
 // commits is the commits log and the state replayed from it.
 type commits struct {
-	seg *Segment
+	seg *segment
 
 	// at is the latest committed offset per group. It is never ranged
 	// without sorting: a map walk that reached output would make the order
@@ -229,9 +229,9 @@ func (l *Log) openCommits() error {
 	// feature, and it grows by one record per commit.
 	opts := Options{MaxBytes: 1 << 62, IndexInterval: l.cfg.Segment.IndexInterval}
 
-	seg, _, err := openNamed(l.fs, CommitsFile, 0, opts, true)
+	seg, _, err := openNamed(l.fs, commitsFile, 0, opts, true)
 	if errors.Is(err, core.ErrNotExist) {
-		seg, err = createNamed(l.fs, CommitsFile, 0, opts)
+		seg, err = createNamed(l.fs, commitsFile, 0, opts)
 		if err == nil {
 			// The directory entry, for the same reason a segment
 			// needs one: a commits log that a crash can remove
@@ -241,7 +241,7 @@ func (l *Log) openCommits() error {
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("log: open %s: %w", CommitsFile, err)
+		return fmt.Errorf("log: open %s: %w", commitsFile, err)
 	}
 
 	c := &commits{seg: seg, at: map[string]Offset{}}

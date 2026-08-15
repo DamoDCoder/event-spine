@@ -21,11 +21,11 @@ func TestRecoveryDiscardsExactlyTheTornTail(t *testing.T) {
 		lastLen := int64(RecordLen(last))
 
 		for cut := int64(1); cut < lastLen; cut++ {
-			name := SegmentName(0)
+			name := segmentName(0)
 
-			s, err := CreateSegment(fs, 0, Options{})
+			s, err := newSegment(fs, 0, Options{})
 			if err != nil {
-				t.Fatalf("CreateSegment: %v", err)
+				t.Fatalf("newSegment: %v", err)
 			}
 			fill(t, s, n)
 			full := s.Bytes()
@@ -47,7 +47,7 @@ func TestRecoveryDiscardsExactlyTheTornTail(t *testing.T) {
 			}
 			f.Close()
 
-			reopened, rec, err := OpenSegment(fs, name, Options{})
+			reopened, rec, err := openSegmentTruncating(fs, name, Options{})
 			if err != nil {
 				t.Fatalf("cut %d: OpenSegment: %v", cut, err)
 			}
@@ -108,11 +108,11 @@ func TestRecoveryDiscardsExactlyTheTornTail(t *testing.T) {
 func TestRecoveryReportsCorruptionSeparately(t *testing.T) {
 	bothFilesystems(t, func(t *testing.T, fs core.FS) {
 		const n = 20
-		name := SegmentName(0)
+		name := segmentName(0)
 
-		s, err := CreateSegment(fs, 0, Options{})
+		s, err := newSegment(fs, 0, Options{})
 		if err != nil {
-			t.Fatalf("CreateSegment: %v", err)
+			t.Fatalf("newSegment: %v", err)
 		}
 		fill(t, s, n)
 		if err := s.Sync(); err != nil {
@@ -129,7 +129,7 @@ func TestRecoveryReportsCorruptionSeparately(t *testing.T) {
 			t.Fatalf("flip: %v", err)
 		}
 
-		reopened, rec, err := OpenSegment(fs, name, Options{})
+		reopened, rec, err := openSegmentTruncating(fs, name, Options{})
 		if err != nil {
 			t.Fatalf("OpenSegment: %v", err)
 		}
@@ -200,9 +200,9 @@ func TestRecoveryAfterASimulatedCrashLandsOnTheLastSyncedRecord(t *testing.T) {
 		t.Run(fmt.Sprintf("sync-after-%d", syncAfter), func(t *testing.T) {
 			fs := sim.NewFS()
 
-			s, err := CreateSegment(fs, 0, Options{})
+			s, err := newSegment(fs, 0, Options{})
 			if err != nil {
-				t.Fatalf("CreateSegment: %v", err)
+				t.Fatalf("newSegment: %v", err)
 			}
 			fill(t, s, syncAfter)
 			if err := s.Sync(); err != nil {
@@ -218,7 +218,7 @@ func TestRecoveryAfterASimulatedCrashLandsOnTheLastSyncedRecord(t *testing.T) {
 
 			fs.Crash()
 
-			reopened, rec, err := OpenSegment(fs, SegmentName(0), Options{})
+			reopened, rec, err := openSegmentTruncating(fs, segmentName(0), Options{})
 			if err != nil {
 				t.Fatalf("OpenSegment: %v", err)
 			}
@@ -236,7 +236,7 @@ func TestRecoveryAfterASimulatedCrashLandsOnTheLastSyncedRecord(t *testing.T) {
 			if rec.Discarded != 0 {
 				t.Fatalf("discarded %d bytes; a record boundary crash should leave nothing to truncate", rec.Discarded)
 			}
-			assertOnDisk(t, fs, SegmentName(0), rec.Valid)
+			assertOnDisk(t, fs, segmentName(0), rec.Valid)
 			for i := range syncAfter {
 				if _, err := reopened.Read(Offset(i)); err != nil {
 					t.Fatalf("synced record %d was lost: %v", i, err)
@@ -251,9 +251,9 @@ func TestRecoveryAfterASimulatedCrashLandsOnTheLastSyncedRecord(t *testing.T) {
 func TestAFailedAppendSealsTheSegment(t *testing.T) {
 	fs := &failingFS{FS: sim.NewFS(), failAfter: 5}
 
-	s, err := CreateSegment(fs, 0, Options{})
+	s, err := newSegment(fs, 0, Options{})
 	if err != nil {
-		t.Fatalf("CreateSegment: %v", err)
+		t.Fatalf("newSegment: %v", err)
 	}
 	defer s.Close()
 

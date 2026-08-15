@@ -55,7 +55,7 @@ func event(i int) core.Event {
 	}
 }
 
-func fill(t *testing.T, s *Segment, n int) {
+func fill(t *testing.T, s *segment, n int) {
 	t.Helper()
 	fillFrom(t, s, 0, n)
 }
@@ -63,7 +63,7 @@ func fill(t *testing.T, s *Segment, n int) {
 // fillFrom appends n events starting at offset from, asserting that the
 // segment assigns the offsets the caller expects. Offsets are gapless within a
 // segment, so the expectation is exact rather than approximate.
-func fillFrom(t *testing.T, s *Segment, from, n int) {
+func fillFrom(t *testing.T, s *segment, from, n int) {
 	t.Helper()
 	for i := from; i < from+n; i++ {
 		off, err := s.Append(event(i))
@@ -78,11 +78,11 @@ func fillFrom(t *testing.T, s *Segment, from, n int) {
 
 func TestSegmentNameRoundTrips(t *testing.T) {
 	for _, base := range []Offset{0, 1, 42, 1 << 20, 1<<64 - 1} {
-		name := SegmentName(base)
-		if len(name) != segmentDigits+len(SegmentSuffix) {
-			t.Fatalf("%q is %d characters, want %d", name, len(name), segmentDigits+len(SegmentSuffix))
+		name := segmentName(base)
+		if len(name) != segmentDigits+len(segmentSuffix) {
+			t.Fatalf("%q is %d characters, want %d", name, len(name), segmentDigits+len(segmentSuffix))
 		}
-		got, ok := ParseSegmentName(name)
+		got, ok := parseSegmentName(name)
 		if !ok || got != base {
 			t.Fatalf("%q parsed as %d, %v; want %d", name, got, ok, base)
 		}
@@ -94,7 +94,7 @@ func TestSegmentNameRoundTrips(t *testing.T) {
 		"00000000000000000000", "00000000000000000000.log.tmp",
 		"-0000000000000000001.log", "0000000000000000000 .log",
 	} {
-		if _, ok := ParseSegmentName(junk); ok {
+		if _, ok := parseSegmentName(junk); ok {
 			t.Fatalf("%q was accepted as a segment name", junk)
 		}
 	}
@@ -104,9 +104,9 @@ func TestSegmentAppendAndRead(t *testing.T) {
 	bothFilesystems(t, func(t *testing.T, fs core.FS) {
 		// A tiny index interval so the sparse index has many entries and
 		// the forward scan after a lookup is actually exercised.
-		s, err := CreateSegment(fs, 0, Options{IndexInterval: 64})
+		s, err := newSegment(fs, 0, Options{IndexInterval: 64})
 		if err != nil {
-			t.Fatalf("CreateSegment: %v", err)
+			t.Fatalf("newSegment: %v", err)
 		}
 		defer s.Close()
 
@@ -146,9 +146,9 @@ func TestSegmentAppendAndRead(t *testing.T) {
 
 func TestSegmentSealAndFull(t *testing.T) {
 	bothFilesystems(t, func(t *testing.T, fs core.FS) {
-		s, err := CreateSegment(fs, 0, Options{MaxBytes: 200})
+		s, err := newSegment(fs, 0, Options{MaxBytes: 200})
 		if err != nil {
-			t.Fatalf("CreateSegment: %v", err)
+			t.Fatalf("newSegment: %v", err)
 		}
 		defer s.Close()
 
@@ -169,9 +169,9 @@ func TestSegmentSealAndFull(t *testing.T) {
 
 func TestReopenACleanSegment(t *testing.T) {
 	bothFilesystems(t, func(t *testing.T, fs core.FS) {
-		s, err := CreateSegment(fs, 0, Options{IndexInterval: 128})
+		s, err := newSegment(fs, 0, Options{IndexInterval: 128})
 		if err != nil {
-			t.Fatalf("CreateSegment: %v", err)
+			t.Fatalf("newSegment: %v", err)
 		}
 		const n = 120
 		fill(t, s, n)
@@ -183,7 +183,7 @@ func TestReopenACleanSegment(t *testing.T) {
 			t.Fatalf("Close: %v", err)
 		}
 
-		reopened, rec, err := OpenSegment(fs, SegmentName(0), Options{IndexInterval: 128})
+		reopened, rec, err := openSegmentTruncating(fs, segmentName(0), Options{IndexInterval: 128})
 		if err != nil {
 			t.Fatalf("OpenSegment: %v", err)
 		}

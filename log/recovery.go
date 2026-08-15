@@ -51,11 +51,7 @@ type Recovery struct {
 // index survived the crash — and this implementation keeps no index file
 // precisely so that there is nothing to survive. A full scan on open is the
 // price, and `task bench:log` is what decides whether it is too high.
-func OpenSegment(fs core.FS, name string, opts Options) (*Segment, Recovery, error) {
-	return openSegment(fs, name, opts, true)
-}
-
-// OpenSealedSegment opens a segment that is not the active one, and refuses to
+// openSealedSegment opens a segment that is not the active one, and refuses to
 // change it.
 //
 // A sealed segment has no legitimate torn tail: nothing has appended to it
@@ -63,7 +59,7 @@ func OpenSegment(fs core.FS, name string, opts Options) (*Segment, Recovery, err
 // crash artefact, and truncating it would be deleting records that were
 // acknowledged as durable. It is reported as an error and the file is left
 // exactly as it was found, for a human to look at.
-func OpenSealedSegment(fs core.FS, name string, opts Options) (*Segment, error) {
+func openSealedSegment(fs core.FS, name string, opts Options) (*segment, error) {
 	s, rec, err := openSegment(fs, name, opts, false)
 	if err != nil {
 		return nil, err
@@ -81,8 +77,14 @@ func OpenSealedSegment(fs core.FS, name string, opts Options) (*Segment, error) 
 	return s, nil
 }
 
-func openSegment(fs core.FS, name string, opts Options, truncate bool) (*Segment, Recovery, error) {
-	base, ok := ParseSegmentName(name)
+// openSegmentTruncating opens an active segment, scans it, and truncates any
+// torn or corrupt tail.
+func openSegmentTruncating(fs core.FS, name string, opts Options) (*segment, Recovery, error) {
+	return openSegment(fs, name, opts, true)
+}
+
+func openSegment(fs core.FS, name string, opts Options, truncate bool) (*segment, Recovery, error) {
+	base, ok := parseSegmentName(name)
 	if !ok {
 		return nil, Recovery{}, fmt.Errorf("log: %q is not a segment file name", name)
 	}
@@ -96,7 +98,7 @@ func openSegment(fs core.FS, name string, opts Options, truncate bool) (*Segment
 // still a file full of framed records, and reusing the segment gives it the
 // same checksums and the same torn-tail recovery rather than a second
 // implementation of both.
-func openNamed(fs core.FS, name string, base Offset, opts Options, truncate bool) (*Segment, Recovery, error) {
+func openNamed(fs core.FS, name string, base Offset, opts Options, truncate bool) (*segment, Recovery, error) {
 	opts = opts.withDefaults()
 
 	f, err := fs.Open(name)
@@ -104,7 +106,7 @@ func openNamed(fs core.FS, name string, base Offset, opts Options, truncate bool
 		return nil, Recovery{}, fmt.Errorf("log: open segment %s: %w", name, err)
 	}
 
-	s := &Segment{
+	s := &segment{
 		file:     f,
 		name:     name,
 		opts:     opts,
@@ -132,7 +134,7 @@ func openNamed(fs core.FS, name string, base Offset, opts Options, truncate bool
 }
 
 // scan reads the segment from the start, validating every record.
-func (s *Segment) scan() (Recovery, error) {
+func (s *segment) scan() (Recovery, error) {
 	size, err := s.file.Size()
 	if err != nil {
 		return Recovery{}, fmt.Errorf("log: size %s: %w", s.name, err)
