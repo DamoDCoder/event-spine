@@ -62,7 +62,7 @@ tasks:
     # defaults: a committed results file is only diffable when the next run
     # measures the same amount of work.
     cmds:
-      - go test -run '^$' -bench=BenchmarkLog -benchmem -benchtime=1s -count=6 -timeout=30m ./internal/log | tee bench/log.txt
+      - go test -run '^$' -bench=BenchmarkLog -benchmem -benchtime=1s -count=6 -timeout=30m ./log | tee bench/log.txt
 
   bench:compare:
     desc: Owned log versus Kafka on an identical workload (M5), both in containers

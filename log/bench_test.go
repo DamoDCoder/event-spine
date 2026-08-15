@@ -253,7 +253,9 @@ func BenchmarkLogOpen(b *testing.B) {
 			h := bench.NewHistogram(b.N)
 			b.ReportAllocs()
 
-			for b.Loop() {
+			// b.N rather than b.Loop() for the same reason as
+			// BenchmarkLogReadCold: the close is untimed and heavy.
+			for range b.N {
 				h.Start()
 				reopened, _, err := Open(fs, cfg)
 				h.Stop()
@@ -304,7 +306,14 @@ func BenchmarkLogReadCold(b *testing.B) {
 	h := bench.NewHistogram(b.N)
 	b.ReportAllocs()
 
-	for i := 0; b.Loop(); i++ {
+	// A b.N loop rather than b.Loop(), and the difference is not stylistic.
+	// b.Loop() decides whether to keep going from the *timed* duration, and
+	// almost all of this benchmark's work — opening a fresh log every
+	// iteration — sits inside a StopTimer region. It never converged: a run
+	// that took six seconds took thirty minutes and died on the timeout.
+	// b.N ramps on wall time, which is what a benchmark with expensive
+	// setup per iteration needs.
+	for i := range b.N {
 		// A fresh log every iteration, so no segment is ever read from
 		// the cache a previous iteration filled.
 		b.StopTimer()

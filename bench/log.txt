@@ -1,138 +1,138 @@
 goos: darwin
 goarch: arm64
-pkg: github.com/DamoDCoder/event-spine/internal/log
+pkg: github.com/DamoDCoder/event-spine/log
 cpu: Apple M2 Max
-BenchmarkLogAppend/sync/64B-12  	     295	   4101295 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/64B-12  	     289	   4134759 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/64B-12  	     268	   4372638 ns/op	   0.01 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/64B-12  	     283	   4445587 ns/op	   0.01 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/64B-12  	     283	   4194515 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/64B-12  	     283	   4183843 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/1024B-12         	     289	   4110226 ns/op	   0.25 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/1024B-12         	     289	   4328502 ns/op	   0.24 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/1024B-12         	     276	   4333207 ns/op	   0.24 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/1024B-12         	     285	   4194573 ns/op	   0.24 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/1024B-12         	     289	   4110220 ns/op	   0.25 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/sync/1024B-12         	     285	   4174596 ns/op	   0.25 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/64B-12          	  153177	      7101 ns/op	   9.01 MB/s	       8 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/64B-12          	  179764	      6864 ns/op	   9.32 MB/s	       8 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/64B-12          	  190390	      6796 ns/op	   9.42 MB/s	       8 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/64B-12          	  193983	      6766 ns/op	   9.46 MB/s	       8 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/64B-12          	  185170	      6986 ns/op	   9.16 MB/s	       8 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/64B-12          	  191709	      7405 ns/op	   8.64 MB/s	       8 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/1024B-12        	  158100	      7881 ns/op	 129.93 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/1024B-12        	  161168	      7786 ns/op	 131.52 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/1024B-12        	  156330	      8146 ns/op	 125.71 MB/s	      25 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/1024B-12        	  156132	     11195 ns/op	  91.47 MB/s	      25 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/1024B-12        	  149235	      8098 ns/op	 126.44 MB/s	      25 B/op	       1 allocs/op
-BenchmarkLogAppend/batch/1024B-12        	  168667	      7711 ns/op	 132.80 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/os/64B-12             	  811194	      1482 ns/op	  43.18 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/os/64B-12             	  787694	      1460 ns/op	  43.85 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/os/64B-12             	  849745	      1434 ns/op	  44.63 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/os/64B-12             	  848230	      1507 ns/op	  42.47 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/os/64B-12             	  825590	      1437 ns/op	  44.53 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/os/64B-12             	  831643	      1432 ns/op	  44.69 MB/s	       9 B/op	       1 allocs/op
-BenchmarkLogAppend/os/1024B-12           	  538376	      2460 ns/op	 416.23 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/os/1024B-12           	  545029	      2347 ns/op	 436.21 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/os/1024B-12           	  536056	      2334 ns/op	 438.65 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/os/1024B-12           	  514880	      2333 ns/op	 438.97 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/os/1024B-12           	  523639	      2329 ns/op	 439.58 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppend/os/1024B-12           	  531598	      2357 ns/op	 434.38 MB/s	      26 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/sync-12          	     234	   5002776 ns/op	   3.27 MB/s	    2549 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/sync-12          	     232	   5063883 ns/op	   3.24 MB/s	    2554 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/sync-12          	     236	   4901870 ns/op	   3.34 MB/s	    2545 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/sync-12          	     241	   4760219 ns/op	   3.44 MB/s	    2535 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/sync-12          	     241	   4904193 ns/op	   3.34 MB/s	    2535 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/sync-12          	     236	   4626064 ns/op	   3.54 MB/s	    2545 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/batch-12         	    1030	   1122928 ns/op	  14.59 MB/s	    2364 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/batch-12         	     957	   1154566 ns/op	  14.19 MB/s	    2389 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/batch-12         	    1063	   1097932 ns/op	  14.92 MB/s	    2355 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/batch-12         	    1017	   1122949 ns/op	  14.59 MB/s	    2368 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/batch-12         	    1044	   1203817 ns/op	  13.61 MB/s	    2360 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/batch-12         	     960	   1230436 ns/op	  13.32 MB/s	    2387 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/os-12            	   85548	     13740 ns/op	1192.47 MB/s	    2362 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/os-12            	  105285	     12139 ns/op	1349.67 MB/s	    2361 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/os-12            	  103225	     11851 ns/op	1382.48 MB/s	    2360 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/os-12            	  103700	     12400 ns/op	1321.27 MB/s	    2360 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/os-12            	   97311	     11866 ns/op	1380.81 MB/s	    2360 B/op	       1 allocs/op
-BenchmarkLogAppendBatch/os-12            	   99690	     11817 ns/op	1386.53 MB/s	    2360 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/64B-12    	     294	   4100272 ns/op	   0.02 MB/s	   6912500 max-ns	   4008375 p50-ns	   6110459 p99-ns	   6912500 p999-ns	       294.0 samples	      37 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/64B-12    	     289	   4113787 ns/op	   0.02 MB/s	   6812625 max-ns	   4017041 p50-ns	   5270500 p99-ns	   6812625 p999-ns	       289.0 samples	      37 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/64B-12    	     288	   4159658 ns/op	   0.02 MB/s	   9798375 max-ns	   4012875 p50-ns	   6977041 p99-ns	   9798375 p999-ns	       288.0 samples	      37 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/64B-12    	     292	   4088523 ns/op	   0.02 MB/s	   9481500 max-ns	   4007084 p50-ns	   5941000 p99-ns	   9481500 p999-ns	       292.0 samples	      37 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/64B-12    	     294	   4118438 ns/op	   0.02 MB/s	   7787875 max-ns	   4006833 p50-ns	   6120542 p99-ns	   7787875 p999-ns	       294.0 samples	      37 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/64B-12    	     294	   4244760 ns/op	   0.02 MB/s	   8034166 max-ns	   4030250 p50-ns	   8021125 p99-ns	   8034166 p999-ns	       294.0 samples	      37 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/1024B-12  	     283	   4204482 ns/op	   0.24 MB/s	   6991084 max-ns	   4022041 p50-ns	   5915458 p99-ns	   6991084 p999-ns	       283.0 samples	      55 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/1024B-12  	     294	   4098339 ns/op	   0.25 MB/s	   9003917 max-ns	   4016625 p50-ns	   5316625 p99-ns	   9003917 p999-ns	       294.0 samples	      53 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/1024B-12  	     286	   4136347 ns/op	   0.25 MB/s	   8018833 max-ns	   4015917 p50-ns	   6007833 p99-ns	   8018833 p999-ns	       286.0 samples	      54 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/1024B-12  	     285	   4115083 ns/op	   0.25 MB/s	   6129292 max-ns	   4004750 p50-ns	   5964167 p99-ns	   6129292 p999-ns	       285.0 samples	      55 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/1024B-12  	     295	   4092343 ns/op	   0.25 MB/s	   6547917 max-ns	   4010667 p50-ns	   6153833 p99-ns	   6547917 p999-ns	       295.0 samples	      53 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/sync/1024B-12  	     290	   4127592 ns/op	   0.25 MB/s	   6067542 max-ns	   4021458 p50-ns	   5916250 p99-ns	   6067542 p999-ns	       290.0 samples	      54 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/64B-12   	  154443	      7042 ns/op	   9.09 MB/s	   5237791 max-ns	      2375 p50-ns	      8208 p99-ns	    246667 p999-ns	    154443 samples	      51 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/64B-12   	  188260	      6940 ns/op	   9.22 MB/s	   5162959 max-ns	      2333 p50-ns	      6958 p99-ns	    311834 p999-ns	    188260 samples	      53 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/64B-12   	  190978	      6898 ns/op	   9.28 MB/s	   5115792 max-ns	      2333 p50-ns	      6833 p99-ns	    180750 p999-ns	    190978 samples	      52 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/64B-12   	  187798	      6984 ns/op	   9.16 MB/s	   6463334 max-ns	      2333 p50-ns	      6792 p99-ns	    309958 p999-ns	    187798 samples	      53 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/64B-12   	  170443	      6993 ns/op	   9.15 MB/s	   8148666 max-ns	      2333 p50-ns	      6917 p99-ns	    286583 p999-ns	    170443 samples	      47 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/64B-12   	  179554	      6812 ns/op	   9.40 MB/s	   8232750 max-ns	      1542 p50-ns	      7375 p99-ns	   2239958 p999-ns	    179554 samples	      55 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/1024B-12 	  160810	      7718 ns/op	 132.67 MB/s	   5497917 max-ns	      2167 p50-ns	      8000 p99-ns	    415667 p999-ns	    160810 samples	      67 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/1024B-12 	  152944	      7781 ns/op	 131.59 MB/s	   6363958 max-ns	      2208 p50-ns	      9292 p99-ns	    413833 p999-ns	    152944 samples	      69 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/1024B-12 	  156693	      7646 ns/op	 133.92 MB/s	   5328625 max-ns	      2166 p50-ns	      9208 p99-ns	    561541 p999-ns	    156693 samples	      68 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/1024B-12 	  175304	      7525 ns/op	 136.08 MB/s	   9604000 max-ns	      2167 p50-ns	      7916 p99-ns	    240709 p999-ns	    175304 samples	      73 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/1024B-12 	  163521	      7800 ns/op	 131.28 MB/s	  10150458 max-ns	      2208 p50-ns	      9500 p99-ns	    567875 p999-ns	    163521 samples	      66 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/batch/1024B-12 	  160593	      7616 ns/op	 134.46 MB/s	   5526583 max-ns	      2166 p50-ns	      9750 p99-ns	    687833 p999-ns	    160593 samples	      67 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/64B-12      	  787094	      1525 ns/op	  41.98 MB/s	   1125250 max-ns	      1375 p50-ns	      3875 p99-ns	     10625 p999-ns	    787094 samples	      51 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/64B-12      	  798972	      1509 ns/op	  42.40 MB/s	    601916 max-ns	      1375 p50-ns	      3792 p99-ns	     10625 p999-ns	    798972 samples	      50 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/64B-12      	  795651	      1506 ns/op	  42.51 MB/s	    599167 max-ns	      1375 p50-ns	      3750 p99-ns	     10375 p999-ns	    795651 samples	      50 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/64B-12      	  801895	      1540 ns/op	  41.55 MB/s	    749459 max-ns	      1375 p50-ns	      4167 p99-ns	     11334 p999-ns	    801895 samples	      50 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/64B-12      	  784892	      1541 ns/op	  41.54 MB/s	    844542 max-ns	      1375 p50-ns	      3959 p99-ns	     11834 p999-ns	    784892 samples	      51 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/64B-12      	  784282	      1546 ns/op	  41.39 MB/s	   3748083 max-ns	      1375 p50-ns	      3875 p99-ns	     11083 p999-ns	    784282 samples	      51 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/1024B-12    	  529366	      2512 ns/op	 407.56 MB/s	   5264500 max-ns	      1583 p50-ns	      8000 p99-ns	     32750 p999-ns	    529366 samples	      66 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/1024B-12    	  519192	      2385 ns/op	 429.31 MB/s	   5595958 max-ns	      1542 p50-ns	      6166 p99-ns	     15042 p999-ns	    519192 samples	      67 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/1024B-12    	  497835	      2395 ns/op	 427.57 MB/s	   5581792 max-ns	      1583 p50-ns	      5917 p99-ns	     14584 p999-ns	    497835 samples	      68 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/1024B-12    	  516508	      2413 ns/op	 424.30 MB/s	   5219833 max-ns	      1583 p50-ns	      6416 p99-ns	     16041 p999-ns	    516508 samples	      67 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/1024B-12    	  500564	      2366 ns/op	 432.79 MB/s	   5299583 max-ns	      1542 p50-ns	      5625 p99-ns	     14208 p999-ns	    500564 samples	      68 B/op	       1 allocs/op
-BenchmarkLogAppendLatency/os/1024B-12    	  509660	      2418 ns/op	 423.52 MB/s	   5748542 max-ns	      1583 p50-ns	      6833 p99-ns	     16250 p999-ns	    509660 samples	      67 B/op	       1 allocs/op
-BenchmarkLogRead/64B-12                  	   41541	     29348 ns/op	    3751 B/op	     100 allocs/op
-BenchmarkLogRead/64B-12                  	   41025	     28688 ns/op	    3751 B/op	     100 allocs/op
-BenchmarkLogRead/64B-12                  	   41851	     28686 ns/op	    3752 B/op	     100 allocs/op
-BenchmarkLogRead/64B-12                  	   40969	     29171 ns/op	    3752 B/op	     100 allocs/op
-BenchmarkLogRead/64B-12                  	   41868	     29139 ns/op	    3751 B/op	     100 allocs/op
-BenchmarkLogRead/64B-12                  	   41709	     28657 ns/op	    3752 B/op	     100 allocs/op
-BenchmarkLogRead/1024B-12                	  255844	      4567 ns/op	    3752 B/op	      10 allocs/op
-BenchmarkLogRead/1024B-12                	  236418	      4731 ns/op	    3752 B/op	      10 allocs/op
-BenchmarkLogRead/1024B-12                	  251038	      4802 ns/op	    3752 B/op	      10 allocs/op
-BenchmarkLogRead/1024B-12                	  259410	      4718 ns/op	    3752 B/op	      10 allocs/op
-BenchmarkLogRead/1024B-12                	  253047	      4564 ns/op	    3752 B/op	      10 allocs/op
-BenchmarkLogRead/1024B-12                	  254724	      4595 ns/op	    3752 B/op	      10 allocs/op
-BenchmarkLogScan/64B-12                  	 1416260	       851.4 ns/op	  75.17 MB/s	     112 B/op	       3 allocs/op
-BenchmarkLogScan/64B-12                  	 1390572	       861.2 ns/op	  74.32 MB/s	     112 B/op	       3 allocs/op
-BenchmarkLogScan/64B-12                  	 1421086	       843.1 ns/op	  75.91 MB/s	     112 B/op	       3 allocs/op
-BenchmarkLogScan/64B-12                  	 1406241	       855.2 ns/op	  74.84 MB/s	     112 B/op	       3 allocs/op
-BenchmarkLogScan/64B-12                  	 1417261	       848.0 ns/op	  75.48 MB/s	     112 B/op	       3 allocs/op
-BenchmarkLogScan/64B-12                  	 1425334	       841.6 ns/op	  76.04 MB/s	     112 B/op	       3 allocs/op
-BenchmarkLogScan/1024B-12                	 1000000	      1153 ns/op	 887.88 MB/s	    1072 B/op	       3 allocs/op
-BenchmarkLogScan/1024B-12                	 1000000	      1118 ns/op	 915.56 MB/s	    1072 B/op	       3 allocs/op
-BenchmarkLogScan/1024B-12                	 1000000	      1118 ns/op	 916.08 MB/s	    1072 B/op	       3 allocs/op
-BenchmarkLogScan/1024B-12                	 1000000	      1121 ns/op	 913.16 MB/s	    1072 B/op	       3 allocs/op
-BenchmarkLogScan/1024B-12                	 1000000	      1156 ns/op	 885.71 MB/s	    1072 B/op	       3 allocs/op
-BenchmarkLogScan/1024B-12                	 1000000	      1154 ns/op	 887.65 MB/s	    1072 B/op	       3 allocs/op
-BenchmarkLogOpen/10000-records-12        	     141	   8452252 ns/op	  10010084 max-ns	   8424042 p50-ns	   9059125 p99-ns	  10010084 p999-ns	       141.0 samples	 1131412 B/op	   30032 allocs/op
-BenchmarkLogOpen/10000-records-12        	     138	   8594581 ns/op	  11549375 max-ns	   8549166 p50-ns	   9491583 p99-ns	  11549375 p999-ns	       138.0 samples	 1131417 B/op	   30032 allocs/op
-BenchmarkLogOpen/10000-records-12        	     141	   8465930 ns/op	   9484041 max-ns	   8462375 p50-ns	   9241375 p99-ns	   9484041 p999-ns	       141.0 samples	 1131427 B/op	   30032 allocs/op
-BenchmarkLogOpen/10000-records-12        	     140	   8496560 ns/op	   9164084 max-ns	   8473833 p50-ns	   9076375 p99-ns	   9164084 p999-ns	       140.0 samples	 1131442 B/op	   30032 allocs/op
-BenchmarkLogOpen/10000-records-12        	     138	   8620069 ns/op	  10443667 max-ns	   8466541 p50-ns	  10393667 p99-ns	  10443667 p999-ns	       138.0 samples	 1131449 B/op	   30032 allocs/op
-BenchmarkLogOpen/10000-records-12        	     141	   8466941 ns/op	   9443209 max-ns	   8460709 p50-ns	   9392250 p99-ns	   9443209 p999-ns	       141.0 samples	 1131429 B/op	   30032 allocs/op
-BenchmarkLogOpen/100000-records-12       	      14	  83615759 ns/op	  84793667 max-ns	  83665667 p50-ns	  84793667 p99-ns	  84793667 p999-ns	        14.00 samples	11283704 B/op	  300040 allocs/op
-BenchmarkLogOpen/100000-records-12       	      14	  85091973 ns/op	  86914791 max-ns	  85159792 p50-ns	  86914791 p99-ns	  86914791 p999-ns	        14.00 samples	11283696 B/op	  300040 allocs/op
-BenchmarkLogOpen/100000-records-12       	      13	  83839372 ns/op	  85510334 max-ns	  83762083 p50-ns	  85510334 p99-ns	  85510334 p999-ns	        13.00 samples	11283695 B/op	  300040 allocs/op
-BenchmarkLogOpen/100000-records-12       	      13	  83598420 ns/op	  85169916 max-ns	  83556375 p50-ns	  85169916 p99-ns	  85169916 p999-ns	        13.00 samples	11283669 B/op	  300039 allocs/op
-BenchmarkLogOpen/100000-records-12       	      13	  83752878 ns/op	  85234833 max-ns	  83713125 p50-ns	  85234833 p99-ns	  85234833 p999-ns	        13.00 samples	11283729 B/op	  300040 allocs/op
-BenchmarkLogOpen/100000-records-12       	      14	  83966357 ns/op	  85821375 max-ns	  83812875 p50-ns	  85821375 p99-ns	  85821375 p999-ns	        14.00 samples	11283833 B/op	  300040 allocs/op
-BenchmarkLogReadCold-12                  	      21	  55638327 ns/op	  61588291 max-ns	  55344500 p50-ns	  61588291 p99-ns	  61588291 p999-ns	        21.00 samples	 7393808 B/op	  196640 allocs/op
-BenchmarkLogReadCold-12                  	      20	  55047160 ns/op	  56419416 max-ns	  55005000 p50-ns	  56419416 p99-ns	  56419416 p999-ns	        20.00 samples	 7393784 B/op	  196640 allocs/op
-BenchmarkLogReadCold-12                  	      20	  55499658 ns/op	  56904000 max-ns	  55514417 p50-ns	  56904000 p99-ns	  56904000 p999-ns	        20.00 samples	 7393829 B/op	  196640 allocs/op
-BenchmarkLogReadCold-12                  	      20	  54887642 ns/op	  56325125 max-ns	  54989750 p50-ns	  56325125 p99-ns	  56325125 p999-ns	        20.00 samples	 7393824 B/op	  196640 allocs/op
-BenchmarkLogReadCold-12                  	      20	  55485764 ns/op	  57097667 max-ns	  55743583 p50-ns	  57097667 p99-ns	  57097667 p999-ns	        20.00 samples	 7393768 B/op	  196640 allocs/op
-BenchmarkLogReadCold-12                  	      21	  54886330 ns/op	  58833250 max-ns	  54683458 p50-ns	  58833250 p99-ns	  58833250 p999-ns	        21.00 samples	 7393786 B/op	  196640 allocs/op
+BenchmarkLogAppend/sync/64B-12  	     286	   4276082 ns/op	   0.01 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/64B-12  	     292	   4048026 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/64B-12  	     294	   4064969 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/64B-12  	     289	   4193959 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/64B-12  	     271	   4346797 ns/op	   0.01 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/64B-12  	     282	   4119935 ns/op	   0.02 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/1024B-12         	     285	   4164710 ns/op	   0.25 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/1024B-12         	     298	   4177778 ns/op	   0.25 MB/s	      25 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/1024B-12         	     290	   4175566 ns/op	   0.25 MB/s	      25 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/1024B-12         	     283	   4243252 ns/op	   0.24 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/1024B-12         	     283	   4246910 ns/op	   0.24 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/sync/1024B-12         	     285	   4136879 ns/op	   0.25 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/64B-12          	  164199	      6938 ns/op	   9.22 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/64B-12          	  182121	      6938 ns/op	   9.22 MB/s	       8 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/64B-12          	  182343	      6962 ns/op	   9.19 MB/s	       8 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/64B-12          	  184916	      6709 ns/op	   9.54 MB/s	       8 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/64B-12          	  182546	      6911 ns/op	   9.26 MB/s	       8 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/64B-12          	  201000	      6820 ns/op	   9.38 MB/s	       8 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/1024B-12        	  162912	      7584 ns/op	 135.02 MB/s	      25 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/1024B-12        	  173023	      7063 ns/op	 144.98 MB/s	      25 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/1024B-12        	  170415	      7661 ns/op	 133.67 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/1024B-12        	  168691	      7297 ns/op	 140.34 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/1024B-12        	  170576	      7509 ns/op	 136.38 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/batch/1024B-12        	  163747	      7394 ns/op	 138.49 MB/s	      25 B/op	       1 allocs/op
+BenchmarkLogAppend/os/64B-12             	  702673	      1470 ns/op	  43.53 MB/s	       8 B/op	       1 allocs/op
+BenchmarkLogAppend/os/64B-12             	  872242	      1399 ns/op	  45.74 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/os/64B-12             	  841172	      1403 ns/op	  45.61 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/os/64B-12             	  845781	      1407 ns/op	  45.49 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/os/64B-12             	  837654	      1431 ns/op	  44.74 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/os/64B-12             	  824413	      1402 ns/op	  45.66 MB/s	       9 B/op	       1 allocs/op
+BenchmarkLogAppend/os/1024B-12           	  535476	      2701 ns/op	 379.09 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/os/1024B-12           	  509703	      2421 ns/op	 422.98 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/os/1024B-12           	  537861	      2430 ns/op	 421.45 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/os/1024B-12           	  534381	      2407 ns/op	 425.49 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/os/1024B-12           	  519920	      2404 ns/op	 425.99 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppend/os/1024B-12           	  527588	      2401 ns/op	 426.43 MB/s	      26 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/sync-12          	     278	   4579055 ns/op	   3.58 MB/s	    2470 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/sync-12          	     231	   5008422 ns/op	   3.27 MB/s	    2556 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/sync-12          	     228	   5025529 ns/op	   3.26 MB/s	    2563 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/sync-12          	     247	   4841794 ns/op	   3.38 MB/s	    2523 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/sync-12          	     241	   4752444 ns/op	   3.45 MB/s	    2535 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/sync-12          	     229	   5047905 ns/op	   3.25 MB/s	    2560 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/batch-12         	     921	   1250821 ns/op	  13.10 MB/s	    2402 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/batch-12         	     960	   1218615 ns/op	  13.44 MB/s	    2387 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/batch-12         	    1024	   1181686 ns/op	  13.86 MB/s	    2366 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/batch-12         	    1008	   1206336 ns/op	  13.58 MB/s	    2371 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/batch-12         	     975	   1226358 ns/op	  13.36 MB/s	    2382 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/batch-12         	     967	   1191633 ns/op	  13.75 MB/s	    2385 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/os-12            	   67593	     18496 ns/op	 885.80 MB/s	    2359 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/os-12            	   83772	     16125 ns/op	1016.09 MB/s	    2360 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/os-12            	   80608	     15291 ns/op	1071.46 MB/s	    2358 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/os-12            	   82303	     15314 ns/op	1069.90 MB/s	    2360 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/os-12            	   81388	     14999 ns/op	1092.35 MB/s	    2358 B/op	       1 allocs/op
+BenchmarkLogAppendBatch/os-12            	   79768	     15024 ns/op	1090.53 MB/s	    2359 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/64B-12    	     291	   4127553 ns/op	   0.02 MB/s	   6051667 max-ns	   4023375 p50-ns	   5950292 p99-ns	   6051667 p999-ns	       291.0 samples	      37 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/64B-12    	     282	   4166128 ns/op	   0.02 MB/s	   8062958 max-ns	   4017625 p50-ns	   7239916 p99-ns	   8062958 p999-ns	       282.0 samples	      38 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/64B-12    	     289	   4151929 ns/op	   0.02 MB/s	   6841041 max-ns	   4024667 p50-ns	   5183750 p99-ns	   6841041 p999-ns	       289.0 samples	      37 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/64B-12    	     298	   4091621 ns/op	   0.02 MB/s	   5975750 max-ns	   4014334 p50-ns	   5118833 p99-ns	   5975750 p999-ns	       298.0 samples	      36 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/64B-12    	     282	   4198547 ns/op	   0.02 MB/s	   8102791 max-ns	   4024542 p50-ns	   5214875 p99-ns	   8102791 p999-ns	       282.0 samples	      38 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/64B-12    	     259	   4412052 ns/op	   0.01 MB/s	   5430916 max-ns	   4076500 p50-ns	   5149792 p99-ns	   5430916 p999-ns	       259.0 samples	      40 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/1024B-12  	     256	   4433211 ns/op	   0.23 MB/s	   5961875 max-ns	   4113042 p50-ns	   5502334 p99-ns	   5961875 p999-ns	       256.0 samples	      36 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/1024B-12  	     280	   4185135 ns/op	   0.24 MB/s	   5261791 max-ns	   4031084 p50-ns	   5103209 p99-ns	   5261791 p999-ns	       280.0 samples	      55 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/1024B-12  	     284	   4144516 ns/op	   0.25 MB/s	   5984750 max-ns	   4004750 p50-ns	   5537083 p99-ns	   5984750 p999-ns	       284.0 samples	      55 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/1024B-12  	     268	   4290662 ns/op	   0.24 MB/s	   6097333 max-ns	   4039375 p50-ns	   5289958 p99-ns	   6097333 p999-ns	       268.0 samples	      58 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/1024B-12  	     283	   4272023 ns/op	   0.24 MB/s	   6701666 max-ns	   4047917 p50-ns	   5146125 p99-ns	   6701666 p999-ns	       283.0 samples	      55 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/sync/1024B-12  	     270	   4369948 ns/op	   0.23 MB/s	  10699959 max-ns	   4079292 p50-ns	   6027083 p99-ns	  10699959 p999-ns	       270.0 samples	      57 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/64B-12   	  208706	      6715 ns/op	   9.53 MB/s	   7840792 max-ns	      2250 p50-ns	      6583 p99-ns	    323792 p999-ns	    208706 samples	      48 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/64B-12   	  201055	      6815 ns/op	   9.39 MB/s	   5335458 max-ns	      2167 p50-ns	      6666 p99-ns	    196166 p999-ns	    201055 samples	      50 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/64B-12   	  187936	      6986 ns/op	   9.16 MB/s	   6587250 max-ns	      2125 p50-ns	      6750 p99-ns	    181291 p999-ns	    187936 samples	      53 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/64B-12   	  182275	      6879 ns/op	   9.30 MB/s	   8571208 max-ns	      2125 p50-ns	      6584 p99-ns	    210542 p999-ns	    182275 samples	      54 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/64B-12   	  190682	      6853 ns/op	   9.34 MB/s	   6657542 max-ns	      2083 p50-ns	      6500 p99-ns	    187500 p999-ns	    190682 samples	      52 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/64B-12   	  185739	      7026 ns/op	   9.11 MB/s	   5401625 max-ns	      2125 p50-ns	      6625 p99-ns	    191833 p999-ns	    185739 samples	      54 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/1024B-12 	  159214	      7886 ns/op	 129.86 MB/s	   5569042 max-ns	      2166 p50-ns	      8375 p99-ns	    287958 p999-ns	    159214 samples	      67 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/1024B-12 	  156954	      7840 ns/op	 130.61 MB/s	   6764000 max-ns	      2084 p50-ns	      8791 p99-ns	    467584 p999-ns	    156954 samples	      67 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/1024B-12 	  174835	      7611 ns/op	 134.54 MB/s	   6785334 max-ns	      2083 p50-ns	      8500 p99-ns	    222917 p999-ns	    174835 samples	      63 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/1024B-12 	  160276	      7803 ns/op	 131.24 MB/s	   5305667 max-ns	      2125 p50-ns	      8833 p99-ns	    264542 p999-ns	    160276 samples	      67 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/1024B-12 	  161062	      7580 ns/op	 135.08 MB/s	   4988958 max-ns	      2083 p50-ns	      8167 p99-ns	    280083 p999-ns	    161062 samples	      67 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/batch/1024B-12 	  178995	      7408 ns/op	 138.22 MB/s	   5272625 max-ns	      2042 p50-ns	      8209 p99-ns	    220000 p999-ns	    178995 samples	      73 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/64B-12      	  694579	      1509 ns/op	  42.42 MB/s	    966750 max-ns	      1334 p50-ns	      4250 p99-ns	     11000 p999-ns	    694579 samples	      56 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/64B-12      	  765838	      1482 ns/op	  43.19 MB/s	    484917 max-ns	      1333 p50-ns	      3792 p99-ns	     10458 p999-ns	    765838 samples	      52 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/64B-12      	  746347	      1552 ns/op	  41.24 MB/s	  13607334 max-ns	      1333 p50-ns	      3791 p99-ns	     10666 p999-ns	    746347 samples	      53 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/64B-12      	  798776	      1483 ns/op	  43.16 MB/s	    477834 max-ns	      1333 p50-ns	      3709 p99-ns	     10416 p999-ns	    798776 samples	      50 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/64B-12      	  806662	      1505 ns/op	  42.53 MB/s	    484583 max-ns	      1334 p50-ns	      3792 p99-ns	     10708 p999-ns	    806662 samples	      50 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/64B-12      	  781350	      1501 ns/op	  42.63 MB/s	   3660458 max-ns	      1333 p50-ns	      3833 p99-ns	     10875 p999-ns	    781350 samples	      51 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/1024B-12    	  526532	      2483 ns/op	 412.34 MB/s	  14050459 max-ns	      1542 p50-ns	      5583 p99-ns	     13750 p999-ns	    526532 samples	      66 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/1024B-12    	  489606	      2487 ns/op	 411.76 MB/s	  13267667 max-ns	      1542 p50-ns	      5833 p99-ns	     13833 p999-ns	    489606 samples	      69 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/1024B-12    	  502221	      2666 ns/op	 384.05 MB/s	  77530292 max-ns	      1583 p50-ns	      7208 p99-ns	     14875 p999-ns	    502221 samples	      68 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/1024B-12    	  505461	      2501 ns/op	 409.49 MB/s	  12856917 max-ns	      1542 p50-ns	      6375 p99-ns	     14167 p999-ns	    505461 samples	      68 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/1024B-12    	  502933	      2490 ns/op	 411.30 MB/s	  12195583 max-ns	      1542 p50-ns	      6125 p99-ns	     14584 p999-ns	    502933 samples	      68 B/op	       1 allocs/op
+BenchmarkLogAppendLatency/os/1024B-12    	  511090	      2482 ns/op	 412.58 MB/s	  12310333 max-ns	      1542 p50-ns	      6250 p99-ns	     14375 p999-ns	    511090 samples	      67 B/op	       1 allocs/op
+BenchmarkLogRead/64B-12                  	   39842	     29560 ns/op	    3751 B/op	     100 allocs/op
+BenchmarkLogRead/64B-12                  	   41259	     28976 ns/op	    3752 B/op	     100 allocs/op
+BenchmarkLogRead/64B-12                  	   40387	     29264 ns/op	    3751 B/op	     100 allocs/op
+BenchmarkLogRead/64B-12                  	   40764	     29514 ns/op	    3752 B/op	     100 allocs/op
+BenchmarkLogRead/64B-12                  	   41293	     28895 ns/op	    3752 B/op	     100 allocs/op
+BenchmarkLogRead/64B-12                  	   41262	     28897 ns/op	    3751 B/op	     100 allocs/op
+BenchmarkLogRead/1024B-12                	  242912	      4724 ns/op	    3752 B/op	      10 allocs/op
+BenchmarkLogRead/1024B-12                	  249237	      4719 ns/op	    3752 B/op	      10 allocs/op
+BenchmarkLogRead/1024B-12                	  244573	      4703 ns/op	    3752 B/op	      10 allocs/op
+BenchmarkLogRead/1024B-12                	  254238	      4723 ns/op	    3752 B/op	      10 allocs/op
+BenchmarkLogRead/1024B-12                	  246223	      4753 ns/op	    3752 B/op	      10 allocs/op
+BenchmarkLogRead/1024B-12                	  258766	      4714 ns/op	    3752 B/op	      10 allocs/op
+BenchmarkLogScan/64B-12                  	 1384114	       867.3 ns/op	  73.79 MB/s	     112 B/op	       3 allocs/op
+BenchmarkLogScan/64B-12                  	 1373326	       880.9 ns/op	  72.66 MB/s	     112 B/op	       3 allocs/op
+BenchmarkLogScan/64B-12                  	 1383253	       868.9 ns/op	  73.66 MB/s	     112 B/op	       3 allocs/op
+BenchmarkLogScan/64B-12                  	 1384486	       866.4 ns/op	  73.87 MB/s	     112 B/op	       3 allocs/op
+BenchmarkLogScan/64B-12                  	 1378543	       872.9 ns/op	  73.32 MB/s	     112 B/op	       3 allocs/op
+BenchmarkLogScan/64B-12                  	 1376461	       870.3 ns/op	  73.54 MB/s	     112 B/op	       3 allocs/op
+BenchmarkLogScan/1024B-12                	 1000000	      1151 ns/op	 889.50 MB/s	    1072 B/op	       3 allocs/op
+BenchmarkLogScan/1024B-12                	 1000000	      1167 ns/op	 877.35 MB/s	    1072 B/op	       3 allocs/op
+BenchmarkLogScan/1024B-12                	  999468	      1154 ns/op	 887.03 MB/s	    1072 B/op	       3 allocs/op
+BenchmarkLogScan/1024B-12                	 1000000	      1148 ns/op	 891.60 MB/s	    1072 B/op	       3 allocs/op
+BenchmarkLogScan/1024B-12                	 1000000	      1158 ns/op	 884.62 MB/s	    1072 B/op	       3 allocs/op
+BenchmarkLogScan/1024B-12                	 1000000	      1152 ns/op	 889.16 MB/s	    1072 B/op	       3 allocs/op
+BenchmarkLogOpen/10000-records-12        	     135	   8866268 ns/op	  10891375 max-ns	   8653375 p50-ns	  10750042 p99-ns	  10891375 p999-ns	       135.0 samples	 1131395 B/op	   30032 allocs/op
+BenchmarkLogOpen/10000-records-12        	     135	   8780265 ns/op	   9279500 max-ns	   8667500 p50-ns	   9274833 p99-ns	   9279500 p999-ns	       135.0 samples	 1131428 B/op	   30032 allocs/op
+BenchmarkLogOpen/10000-records-12        	     135	   8708215 ns/op	   9539667 max-ns	   8614667 p50-ns	   9259916 p99-ns	   9539667 p999-ns	       135.0 samples	 1131431 B/op	   30032 allocs/op
+BenchmarkLogOpen/10000-records-12        	     135	   8762986 ns/op	   9146583 max-ns	   8671666 p50-ns	   9087792 p99-ns	   9146583 p999-ns	       135.0 samples	 1131440 B/op	   30032 allocs/op
+BenchmarkLogOpen/10000-records-12        	     134	   8741423 ns/op	   9255792 max-ns	   8653208 p50-ns	   9097541 p99-ns	   9255792 p999-ns	       134.0 samples	 1131455 B/op	   30032 allocs/op
+BenchmarkLogOpen/10000-records-12        	     134	   8779296 ns/op	   9225500 max-ns	   8679417 p50-ns	   9198958 p99-ns	   9225500 p999-ns	       134.0 samples	 1131439 B/op	   30032 allocs/op
+BenchmarkLogOpen/100000-records-12       	      12	  87205740 ns/op	  87015583 max-ns	  86414583 p50-ns	  87015583 p99-ns	  87015583 p999-ns	        12.00 samples	11284171 B/op	  300043 allocs/op
+BenchmarkLogOpen/100000-records-12       	      12	  87215229 ns/op	  87779125 max-ns	  86384917 p50-ns	  87779125 p99-ns	  87779125 p999-ns	        12.00 samples	11284219 B/op	  300043 allocs/op
+BenchmarkLogOpen/100000-records-12       	      12	  88167295 ns/op	  88750500 max-ns	  87214750 p50-ns	  88750500 p99-ns	  88750500 p999-ns	        12.00 samples	11284120 B/op	  300042 allocs/op
+BenchmarkLogOpen/100000-records-12       	      12	  88153545 ns/op	  88067250 max-ns	  87052417 p50-ns	  88067250 p99-ns	  88067250 p999-ns	        12.00 samples	11284179 B/op	  300043 allocs/op
+BenchmarkLogOpen/100000-records-12       	      12	  88595882 ns/op	  89120916 max-ns	  87580958 p50-ns	  89120916 p99-ns	  89120916 p999-ns	        12.00 samples	11284115 B/op	  300042 allocs/op
+BenchmarkLogOpen/100000-records-12       	      12	  88739302 ns/op	  92249792 max-ns	  87451750 p50-ns	  92249792 p99-ns	  92249792 p999-ns	        12.00 samples	11284171 B/op	  300043 allocs/op
+BenchmarkLogReadCold-12                  	      20	  56791479 ns/op	  57403500 max-ns	  56306583 p50-ns	  57403500 p99-ns	  57403500 p999-ns	        20.00 samples	 7394101 B/op	  196642 allocs/op
+BenchmarkLogReadCold-12                  	      20	  57897315 ns/op	  63363958 max-ns	  57090083 p50-ns	  63363958 p99-ns	  63363958 p999-ns	        20.00 samples	 7394087 B/op	  196642 allocs/op
+BenchmarkLogReadCold-12                  	      20	  57227575 ns/op	  57749083 max-ns	  56711292 p50-ns	  57749083 p99-ns	  57749083 p999-ns	        20.00 samples	 7394082 B/op	  196642 allocs/op
+BenchmarkLogReadCold-12                  	      20	  57366444 ns/op	  57781500 max-ns	  56892916 p50-ns	  57781500 p99-ns	  57781500 p999-ns	        20.00 samples	 7394135 B/op	  196643 allocs/op
+BenchmarkLogReadCold-12                  	      20	  57462765 ns/op	  60328541 max-ns	  56774250 p50-ns	  60328541 p99-ns	  60328541 p999-ns	        20.00 samples	 7394101 B/op	  196642 allocs/op
+BenchmarkLogReadCold-12                  	      20	  57437561 ns/op	  57797042 max-ns	  57014125 p50-ns	  57797042 p99-ns	  57797042 p999-ns	        20.00 samples	 7394111 B/op	  196642 allocs/op
 PASS
-ok  	github.com/DamoDCoder/event-spine/internal/log	183.193s
+ok  	github.com/DamoDCoder/event-spine/log	210.423s
