@@ -126,11 +126,16 @@ from a physical disk and is around ten times cheaper per fsync. Both systems get
 the same discount, so the *ratio* survives; the absolute numbers describe a
 virtual disk.
 
-**No durability claim is published here**, as the protocol said in advance.
-Nothing in this repository has yet been tested against real power loss — the
-trigger set in [m2-filesystem-model.md](m2-filesystem-model.md) — so this
+**No durability claim is published here**, as the protocol said in advance. This
 comparison says which system is faster and nothing whatever about which loses
 less.
+
+> That was written when nothing here had been tested against real power loss.
+> [power-loss.md](power-loss.md) has since closed the trigger set in
+> [m2-filesystem-model.md](m2-filesystem-model.md) for the spine — real cuts,
+> real ext4 and xfs, three bugs found. It says nothing about Kafka, which was
+> never put through it, so this section stands as written: no comparative
+> durability claim.
 
 **The process boundary is not separated from the log.** The honest form of
 prediction 1's second half needs the spine behind a socket, and the spine has no
