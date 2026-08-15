@@ -78,11 +78,37 @@ grouped under `Unreleased`.
   checking that a clean restart loses nothing and that commits and snapshots come
   back exactly, and it keeps a reader alive across restarts and compactions.
   Recorded in seed front matter and defaulting to the old rhythm.
+- `log.Restore`: the newest snapshot and a reader positioned after it, which is
+  the documented recovery path with the one available off-by-one removed.
+- `docs/adopting.md`: the integration guide — the five behaviours that surprise
+  people, each linked to the seed that found it, the single-owner rule, choosing
+  a durability mode, using `sim` in a consumer's own tests, and what the spine
+  deliberately does not do. Runnable examples in `log/example_test.go`.
 - `spine replay`: scrub a seed step by step, inspect one step in full, list the
   filesystem operations with the faults that fired on them, or diff a failing
   run against the same seed with no faults. The M4 result is in
   `docs/decisions/m4-replay-devtools.md`, and `task demo:replay` reproduces the
   walkthrough in `docs/walkthrough-replay.md`.
+
+### Changed
+
+- **The spine is importable.** `core`, `log`, `runtime`, and `sim` move out of
+  `internal/`; `internal/devtools` stays. The old rule — everything internal
+  until three projects consume the spine — could not survive contact with its
+  own goal, because Go's `internal/` rule makes a package literally unreachable
+  and no project could ever become the first consumer. The intent was *no API
+  stability promise*, and that is unchanged: v0, the surface will break, pin a
+  version.
+- **The module has no third-party dependencies.** The Kafka comparison moved to
+  its own module under `tools/kafkacompare`, because it needs a client, that
+  client needs Go 1.25, and a project adopting the log should inherit neither.
+  The spine's `go` directive is 1.24 — the floor is kept as low as the code
+  allows so a consumer is never forced to upgrade, while the container still
+  pins the toolchain by digest as the authoritative build.
+- `BenchmarkLogReadCold` and `BenchmarkLogOpen` use a `b.N` loop rather than
+  `b.Loop()`. Both open a fresh log every iteration inside a `StopTimer` region,
+  and `b.Loop()` continues on timed duration alone, so they never converged: a
+  six second benchmark took thirty minutes and died on the timeout.
 
 ### Fixed
 

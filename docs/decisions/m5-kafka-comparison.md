@@ -49,6 +49,17 @@ runs per configuration, median reported.
 | 1 KiB | `batch` | 735,643 | 755,281 |
 | 1 KiB | `os` | 744,154 | 640,385 |
 
+> **Re-run on 2026-08-15**, after rolling was made to sync in every mode. Every
+> ratio holds: 1.39x, 3.3x, and 20.6x at 64 bytes against the 1.35x, 4.0x, and
+> 23.5x above, which is run-to-run variance rather than a change.
+>
+> The `os` row is worth a sentence, because `bench/log.txt` moved 29% on the
+> same change and this did not. The comparison writes 50,000 records of 64 bytes
+> into a log with the default 64 MiB segments — about 3 MB, so it never rolls
+> and never pays the new sync. The benchmark that moved writes enough to roll
+> repeatedly. Both numbers are honest and they measure different amounts of
+> segment turnover, which is the kind of thing a committed results file is for.
+
 ## The Protocol Was Wrong, And The Numbers Said So
 
 The first complete run reported the spine at 317,448 records/sec against Kafka's
